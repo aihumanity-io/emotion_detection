@@ -1,0 +1,138 @@
+//
+//  EmotionMobilenetv1.swift
+//  Runner
+//
+//  Created by david Chiu on 11/9/24.
+//
+//
+//  Copyright © 2024 Creata AI. All rights reserved.
+// Implementation of Face Expression Prediction  model
+//
+
+import Foundation
+
+
+import Foundation
+import CoreGraphics
+import Accelerate
+import AVFoundation
+import CoreImage
+import Darwin
+import UIKit
+import CoreML
+
+import CryptoKit
+import os
+
+@available(iOS 15.0, *)
+private func frameworkBundle() -> Bundle {
+    // This resolves to emotion_detection.framework’s bundle at runtime
+    return Bundle(for: EmotionMobilenet.self)
+}
+@available(iOS 15.0, *)
+class EmotionMobilenet: MLBase {
+    
+    let threadCount: Int32 = 1
+    
+    // MARK: - Model Parameters
+
+    var coreMLModel: mobilenetv1_fer2024_11_06_08_48_50?  //fer_cnn214?
+    //let emotionList: [String] = ["anger", "disgust", "fear", "happiness", "sadness", "surprise", "neutral"]
+    let emotionList: [String] = ["Anger", "Disgust", "Fear", "Happiness", "Neutral", "Sadness", "Surprise"]
+    var emotionBuffer = [Int]()
+    let nAverage = 3
+            
+    override init() throws {
+                
+        do
+        {
+            try super.init()
+            //modelConfig = MLModelConfiguration()
+            modelConfig.computeUnits = .cpuAndGPU
+            let fw = frameworkBundle()
+            print("Using bundle: \(fw.bundlePath)")
+            
+            let currentUserName = "dev@tartalabs.io"
+            let manifest: Manifest = try loadManifestJSON(fromBundle: "mobilenetv1_fer2024-11-06-08-48-50.manifest.manifest")
+
+            let cekData = try obtainCEK_UserCodeGateSync(
+                manifest: manifest,
+                userName: currentUserName,
+                user32Provider: { try User32SideLoad.loadUser32Data(bundle: .main) } // or plugin bundle
+            )
+
+            let model = try EncryptedModelLoader.loadFromBundle(
+                baseName: "mobilenetv1_fer2024-11-06-08-48-50",
+                configuration: modelConfig,
+                framework: fw
+            ) { SymmetricKey(data: cekData) }
+
+            let typed = mobilenetv1_fer2024_11_06_08_48_50(model: model)
+            coreMLModel = typed
+            print("model mobilenetv1_fer2024-11-06-08-48-50 loaded")
+        }
+        catch {
+            let ns = error as NSError
+            let log = Logger(subsystem: "com.creataai.emotionsdk", category: "model")
+            log.logUnknown(ns, context: "aih_fer model loading")
+            throw MLError.Error("Failed to find model file.")
+        }
+ 
+       
+    }
+
+    func runModel(faceImage: CGImage) throws ->
+    [String:Float] {
+
+        //let grayPixelBuffer = faceImage.pixelBufferGray(width: 48, height: 48, orientation: .up)
+        
+        let pixelBuffer = faceImage.pixelBuffer(width: 224, height: 224, orientation: .up)
+        /// for imon's itracker implementation
+        let prediction =  try coreMLModel!.prediction(input_1:pixelBuffer!)
+
+            //let array = prediction.Identity
+            //let array = prediction.var_995
+        let marray = prediction.Identity
+        guard let array = MLBase.toArray(multiArray: marray) else {
+            return [:] //"None"
+        }
+        guard let max = array.firstIndexOfMaxElement() else {
+            return [:] //"None"
+        }
+        var emotions: [String: Float] = [:]
+        for i in 0..<7 {
+            emotions[emotionList[i]] = array[i]
+            
+        }
+        //print("\(max)")
+        //print("\(array[0]), \(array[1])")
+        
+       /* if max >= 0 && max < emotionList.count {
+            return emotionList[applyAverage(index: max)]
+        }*/
+
+        //print("emotion: \(array)")
+        return emotions
+    }
+    
+    func applyAverage(index: Int) -> Int {
+        if emotionBuffer.count >= nAverage {
+            emotionBuffer.removeFirst()
+        }
+        emotionBuffer.append(index)
+        print(emotionBuffer)
+        let hist = emotionBuffer.histogram
+        print(hist)
+        var max = 0, mvalue = 0
+        for var ele in hist {
+            if ele.value > mvalue{
+                max = ele.key
+                mvalue = ele.value
+            }
+        }
+        print(max)
+        return max
+    }
+
+}
+

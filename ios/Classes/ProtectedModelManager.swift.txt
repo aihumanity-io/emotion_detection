@@ -1,0 +1,206 @@
+import Foundation
+import CoreML
+import CryptoKit
+import Security
+import os.log
+
+public struct ProtectedModelSpec: Codable {
+  public let modelId: String            // unique key from Dart
+  public let resourceBase: String       // filename without extension, e.g. "face_v1"
+  public let encExt: String?            // default "mlmodel.enc"
+  public let hkdfInfo: String?          // default "my_plugin_model"
+  public let masterKeyB64: String?      // optional (you can pass at runtime via keyShard instead)
+  public init(modelId: String, resourceBase: String, encExt: String? = nil,
+              hkdfInfo: String? = nil, masterKeyB64: String? = nil) {
+    self.modelId = modelId
+    self.resourceBase = resourceBase
+    self.encExt = encExt
+    self.hkdfInfo = hkdfInfo
+    self.masterKeyB64 = masterKeyB64
+  }
+}
+
+enum ProtectedModelManager {
+  private static let log = OSLog(subsystem: "my_plugin", category: "ProtectedModel")
+  private static let keychainService = "com.your.bundle.my_plugin"
+  private static let saltAccountPrefix = "device_salt_"
+  private static let cacheFolderName = "my_plugin_modelcache"
+
+  // Registries
+  private static var specs: [String: ProtectedModelSpec] = [:]
+  private static var keyShards: [String: Data] = [:]
+  private static var models: [String: MLModel] = [:]
+  private static let lock = NSLock()
+
+  // MARK: API
+
+  static func register(spec: ProtectedModelSpec) {
+    lock.lock(); defer { lock.unlock() }
+    specs[spec.modelId] = spec
+  }
+
+  static func setKeyShard(modelId: String, base64: String) throws {
+    guard let d = Data(base64Encoded: base64) else {
+      throw NSError(domain: "ProtectedModel", code: -30, userInfo: [NSLocalizedDescriptionKey: "keyShard base64 invalid"])
+    }
+    lock.lock(); defer { lock.unlock() }
+    keyShards[modelId] = d
+  }
+
+  static func loadModel(modelId: String) throws -> MLModel {
+    // fast path: already loaded
+    if let m = (lock.lock(); defer { lock.unlock() }, models[modelId]) { return m }
+
+    guard let spec = (lock.lock(), specs[modelId]).map({ v in lock.unlock(); return v }) else {
+      throw NSError(domain: "ProtectedModel", code: -31, userInfo: [NSLocalizedDescriptionKey: "Model \(modelId) not registered"])
+    }
+
+    // Locate encrypted blob
+    let encURL = try locateEncrypted(resourceBase: spec.resourceBase, encExt: spec.encExt ?? "mlmodel.enc")
+
+    // Derive key
+    let master = try masterKeyBytes(spec.masterKeyB64)
+    let salt = try fetchOrCreateDeviceSalt(for: spec.modelId)
+    let shard = (lock.lock(); defer { lock.unlock() }; keyShards[spec.modelId])
+    let key = deriveKeyHKDF(masterKey: master, deviceSalt: salt, shard: shard, info: spec.hkdfInfo ?? "my_plugin_model")
+
+    // Cache path keyed by encrypted blob hash + modelId
+    let encHash = try sha256Hex(of: encURL)
+    let compiledURL = try compiledCachePath(for: spec.modelId, hash: encHash)
+
+    // Use cache if exists
+    if FileManager.default.fileExists(atPath: compiledURL.path) {
+      let model = try MLModel(contentsOf: compiledURL)
+      lock.lock(); models[spec.modelId] = model; lock.unlock()
+      return model
+    }
+
+    // Decrypt -> compile -> move into cache
+    let plainURL = try decryptToTempPlainModel(encURL: encURL, key: key)
+    defer { try? FileManager.default.removeItem(at: plainURL) }
+
+    let compiledTmp = try MLModel.compileModel(at: plainURL)
+    try FileManager.default.createDirectory(at: compiledURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+    if FileManager.default.fileExists(atPath: compiledURL.path) { try? FileManager.default.removeItem(at: compiledURL) }
+    try FileManager.default.moveItem(at: compiledTmp, to: compiledURL)
+    try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: compiledURL.path)
+
+    let model = try MLModel(contentsOf: compiledURL)
+    lock.lock(); models[spec.modelId] = model; lock.unlock()
+    return model
+  }
+
+  static func unload(modelId: String) {
+    lock.lock(); defer { lock.unlock() }
+    models.removeValue(forKey: modelId)
+  }
+
+  // MARK: Internals
+
+  private static func locateEncrypted(resourceBase: String, encExt: String) throws -> URL {
+    // try direct
+    if let url = Bundle.main.url(forResource: resourceBase, withExtension: encExt) { return url }
+    if let url = Bundle(for: DummyBundleProbe.self).url(forResource: resourceBase, withExtension: encExt) { return url }
+
+    // scan bundle if nested under subfolders
+    let filename = resourceBase + "." + encExt
+    let fm = FileManager.default
+    for b in [Bundle.main, Bundle(for: DummyBundleProbe.self)] {
+      if let root = b.resourcePath {
+        let it = fm.enumerator(atPath: root)
+        while let p = it?.nextObject() as? String {
+          if p.hasSuffix("/\(filename)") || p == filename {
+            return URL(fileURLWithPath: root).appendingPathComponent(p)
+          }
+        }
+      }
+    }
+    throw NSError(domain: "ProtectedModel", code: -32, userInfo: [NSLocalizedDescriptionKey: "Encrypted resource \(filename) not found"])
+  }
+
+  private static func masterKeyBytes(_ b64: String?) throws -> Data {
+    guard let b64 = b64, let d = Data(base64Encoded: b64) else {
+      // master key optional (can rely solely on device salt + shard)
+      return Data()
+    }
+    if d.count != 32 {
+      throw NSError(domain: "ProtectedModel", code: -33, userInfo: [NSLocalizedDescriptionKey: "masterKey must be 32B base64"])
+    }
+    return d
+  }
+
+  private static func fetchOrCreateDeviceSalt(for modelId: String) throws -> Data {
+    let account = saltAccountPrefix + modelId
+    if let existing = try? keychainRead(account: account) { return existing }
+    var salt = Data(count: 32)
+    let status = salt.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
+    guard status == errSecSuccess else { throw NSError(domain: "ProtectedModel", code: -34, userInfo: [NSLocalizedDescriptionKey: "salt gen failed"]) }
+    try keychainWrite(account: account, data: salt)
+    return salt
+  }
+
+  private static func deriveKeyHKDF(masterKey: Data, deviceSalt: Data, shard: Data?, info: String) -> SymmetricKey {
+    var ikm = Data()
+    ikm.append(masterKey)       // may be empty
+    ikm.append(deviceSalt)
+    if let shard = shard { ikm.append(shard) }  // supplied by app at runtime (recommended)
+    return HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: ikm),
+                                  info: info.data(using: .utf8)!,
+                                  salt: Data(), outputByteCount: 32)
+  }
+
+  private static func sha256Hex(of url: URL) throws -> String {
+    let data = try Data(contentsOf: url)
+    let d = SHA256.hash(data: data)
+    return d.map { String(format: "%02x", $0) }.joined()
+  }
+
+  private static func compiledCachePath(for modelId: String, hash: String) throws -> URL {
+    let caches = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+    return caches.appendingPathComponent(cacheFolderName, isDirectory: true)
+                 .appendingPathComponent(modelId + "_" + hash, isDirectory: true)
+                 .appendingPathComponent("model.mlmodelc", isDirectory: true)
+  }
+
+  private static func decryptToTempPlainModel(encURL: URL, key: SymmetricKey) throws -> URL {
+    let encData = try Data(contentsOf: encURL)
+    let sealed = try AES.GCM.SealedBox(combined: encData)
+    let plain = try AES.GCM.open(sealed, using: key)
+    let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("pmodel_" + UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+    let modelURL = tempDir.appendingPathComponent("model.mlmodel")
+    try plain.write(to: modelURL, options: .completeFileProtection)
+    try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: modelURL.path)
+    return modelURL
+  }
+
+  // Keychain
+  private static func keychainWrite(account: String, data: Data) throws {
+    let q: [CFString: Any] = [
+      kSecClass: kSecClassGenericPassword,
+      kSecAttrService: keychainService,
+      kSecAttrAccount: account,
+      kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+      kSecValueData: data
+    ]
+    SecItemDelete(q as CFDictionary)
+    let st = SecItemAdd(q as CFDictionary, nil)
+    guard st == errSecSuccess else { throw NSError(domain: "ProtectedModel", code: -35, userInfo: [NSLocalizedDescriptionKey: "Keychain write: \(st)"]) }
+  }
+
+  private static func keychainRead(account: String) throws -> Data {
+    let q: [CFString: Any] = [
+      kSecClass: kSecClassGenericPassword,
+      kSecAttrService: keychainService,
+      kSecAttrAccount: account,
+      kSecReturnData: true,
+      kSecMatchLimit: kSecMatchLimitOne
+    ]
+    var item: CFTypeRef?
+    let st = SecItemCopyMatching(q as CFDictionary, &item)
+    guard st == errSecSuccess, let data = item as? Data else { throw NSError(domain: "ProtectedModel", code: -36, userInfo: [NSLocalizedDescriptionKey: "Keychain read: \(st)"]) }
+    return data
+  }
+
+  private class DummyBundleProbe {}
+}

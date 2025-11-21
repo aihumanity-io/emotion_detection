@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Copyright (c) 2025.
+  ~ David Chiu
+  ~ Created:   9-12-2025
+  -->
+
+<resources>
+    <string name="emotion_bundled_code_b64"></string> <!-- default empty -->
+</resources>

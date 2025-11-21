@@ -1,0 +1,233 @@
+import Security
+import CryptoKit
+enum User32StoreErr: Error { case notFound, badStatus(OSStatus) }
+
+enum User32Store {
+    static let service = "com.creataai.emotionsdk.user32"
+    static func delete(account: String, accessGroup: String? = nil) throws {
+            var q: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+                kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
+            ]
+            if let ag = accessGroup { q[kSecAttrAccessGroup as String] = ag }
+            let st = SecItemDelete(q as CFDictionary)
+            guard st == errSecSuccess || st == errSecItemNotFound else { throw User32StoreErr.badStatus(st) }
+        }
+
+    static func save(_ data: Data, account: String, requireBiometrics: Bool = false, accessGroup: String? = nil) throws {
+            var q: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+                kSecValueData as String: data
+            ]
+            if let ag = accessGroup { q[kSecAttrAccessGroup as String] = ag }
+
+            if requireBiometrics {
+                let ac = SecAccessControlCreateWithFlags(nil,
+                                                         kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+                                                         [.biometryCurrentSet],
+                                                         nil)!
+                q.removeValue(forKey: kSecAttrAccessible as String)
+                q[kSecAttrAccessControl as String] = ac
+            }
+
+            // Idempotent replace
+            try delete(account: account, accessGroup: accessGroup)
+            let st = SecItemAdd(q as CFDictionary, nil)
+            guard st == errSecSuccess else { throw User32StoreErr.badStatus(st) }
+        }
+
+        /// Probe fetch that **never** shows UI. If this returns errSecInteractionNotAllowed,
+        /// the item requires biometry/user presence.
+        static func loadNoUI(account: String, accessGroup: String? = nil) throws -> Data {
+            var q: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+                kSecReturnData as String: true,
+                kSecMatchLimit as String: kSecMatchLimitOne,
+                kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail
+            ]
+            if let ag = accessGroup { q[kSecAttrAccessGroup as String] = ag }
+
+            var item: CFTypeRef?
+            let st = SecItemCopyMatching(q as CFDictionary, &item)
+            guard st == errSecSuccess, let d = item as? Data else {
+                throw User32StoreErr.badStatus(st)
+            }
+            return d
+        }
+    static func saveOD(_ data: Data, account: String, requireBiometrics: Bool = false) throws {
+        var q: [String:Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecValueData as String: data
+        ]
+        if false /*requireBiometrics*/ {
+            let sac = SecAccessControlCreateWithFlags(
+                nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly, [.biometryCurrentSet], nil)!
+            q.removeValue(forKey: kSecAttrAccessible as String)
+            q[kSecAttrAccessControl as String] = sac
+        }
+        SecItemDelete(q as CFDictionary)
+        let st = SecItemAdd(q as CFDictionary, nil)
+        guard st == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(st)) }
+    }
+    static func load(account: String) throws -> Data {
+        let q: [String:Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let st = SecItemCopyMatching(q as CFDictionary, &item)
+        guard st == errSecSuccess, let d = item as? Data else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(st))
+        }
+        return d
+    }
+}
+
+@available(iOS 14.0, *)
+func deriveKEK(user32: Data, aad: String, kdfInfo: String) -> SymmetricKey {
+    HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: user32),
+        salt: Data(aad.utf8), info: Data(kdfInfo.utf8), outputByteCount: 32)
+}
+
+func unwrapCEK_fromManifest(wrappedCEK_B64: String, kek: SymmetricKey, aad: String) throws -> Data {
+    let env = Data(base64Encoded: wrappedCEK_B64.trimmingCharacters(in: .whitespacesAndNewlines))!
+    let box = try AES.GCM.SealedBox(combined: env) // typo? fix: AES.GCM
+    return try AES.GCM.open(box, using: kek, authenticating: Data(aad.utf8))
+}
+struct Manifest: Decodable {
+    let enc_sha256: String
+    let aad: String
+    let wrapped_cek_b64: String
+    let kdf_info: String
+    // … other fields you already have
+}
+
+@available(iOS 14.0, *)
+/*func obtainCEK_UserCodeGate(
+manifest: Manifest,
+userName: String,
+user32Supplier: () async throws -> Data  // server fetch or side-loaded file
+) async throws -> Data {
+    // Load or import user32 (32 bytes)
+    let acct = userName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let user32: Data = (try? User32Store.load(account: acct)) ?? {
+        let d = try! await user32Supplier()
+        try! User32Store.save(d, account: acct, requireBiometrics: true)   // turn biometrics on/off
+        return d
+    }()
+
+    // Derive KEK and unwrap CEK
+    let kek = deriveKEK(user32: user32, aad: manifest.aad, kdfInfo: manifest.kdf_info)
+    let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: manifest.wrapped_cek_b64,
+        kek: kek, aad: manifest.aad)
+    return cek
+}*/
+
+// Errors you already use can replace this
+enum UserGateError: Error { case manifestMissingFields, invalidUser32 }
+
+/// Async supplier version (server or side-loaded async)
+@available(iOS 14.0, *)
+func obtainCEK_UserCodeGate(
+    manifest: Manifest,
+    userName: String,
+    user32Supplier: () async throws -> Data
+) async throws -> Data {
+    let acct = userName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+    // 1) Load cached user32 or fetch & cache
+    let user32: Data
+    if let cached = try? User32Store.load(account: acct) {
+        user32 = cached
+    } else {
+        let fetched = try await user32Supplier()
+        guard fetched.count == 32 else {
+            throw UserGateError.invalidUser32
+       }
+        try User32Store.save(fetched, account: acct, requireBiometrics: false)
+        user32 = fetched
+    }
+
+    // 2) Unwrap CEK from manifest using HKDF(user32) → KEK, then AES-GCM open
+    /*guard
+        let aad = manifest.aad, !aad.isEmpty,
+        let wrapped = manifest.wrapped_cek_b64, !wrapped.isEmpty,
+        let kdfInfo = manifest.kdf_info, !kdfInfo.isEmpty
+    else { if #available(iOS 14.0, *) {
+        throw UserGateError.manifestMissingFields
+    } else {
+        // Fallback on earlier versions
+    } }*/
+    let aad     = manifest.aad
+        let wrapped = manifest.wrapped_cek_b64
+        let kdfInfo = manifest.kdf_info
+        guard !aad.isEmpty, !wrapped.isEmpty, !kdfInfo.isEmpty else {
+            throw UserGateError.manifestMissingFields
+        }
+
+
+    let kek = deriveKEK(user32: user32, aad: aad, kdfInfo: kdfInfo)
+    let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aad)
+    return cek
+}
+
+/// Sync supplier version (e.g., local file)
+func obtainCEK_UserCodeGate(
+    manifest: Manifest,
+    userName: String,
+    user32Supplier: () throws -> Data
+) async throws -> Data {
+    try await obtainCEK_UserCodeGate(
+        manifest: manifest,
+        userName: userName,
+        user32Supplier: {
+            let d = try user32Supplier()
+            return d
+        }
+    )
+}
+
+@available(iOS 14.0, *)
+func obtainCEK_UserCodeGateSync(
+    manifest: Manifest,
+    userName: String,
+    user32Provider: () throws -> Data
+) throws -> Data {
+    let acct = userName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+    // load cached or import and cache
+    let user32: Data
+    if let cached = try? User32Store.load(account: acct) {
+        user32 = cached
+    } else {
+        let fetched = try user32Provider()
+        guard fetched.count == 32 else { throw UserGateError.invalidUser32 }
+        try User32Store.save(fetched, account: acct, requireBiometrics: false)
+        user32 = fetched
+    }
+
+    // If your Manifest fields are optionals, switch to guard lets
+    let aad     = manifest.aad
+    let wrapped = manifest.wrapped_cek_b64
+    let kdfInfo = manifest.kdf_info
+    guard !aad.isEmpty, !wrapped.isEmpty, !kdfInfo.isEmpty else {
+        throw UserGateError.manifestMissingFields
+    }
+
+    let kek = deriveKEK(user32: user32, aad: aad, kdfInfo: kdfInfo)
+    let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aad)
+    return cek
+}
