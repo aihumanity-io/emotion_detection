@@ -69,6 +69,7 @@ class ExampleSdkSecretModule {
   String? extractUserCode(Map<String, dynamic> payload) {
     for (final key in const [
       'userCodeB64',
+      'userSecretB64',
       'user32B64',
       'user32',
       'user_code_b64'

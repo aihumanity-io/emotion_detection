@@ -29,6 +29,7 @@ class _MyAppState extends State<MyApp> {
   final ExampleSdkSecretModule _sdkSecretModule = ExampleSdkSecretModule();
   String _cekSecretStatus = 'Not requested yet.';
   bool _fetchingCekSecret = false;
+  bool _userCodeReady = false;
 
   @override
   void initState() {
@@ -72,45 +73,36 @@ class _MyAppState extends State<MyApp> {
       _cekSecretStatus = 'Requesting /sdk/cek-secret...';
     });
     final result = await _sdkSecretModule.fetchCekSecret();
-    String nextStatus;
-    if (result == null) {
-      nextStatus = 'fetchCekSecret returned null (see logs).';
-    } else {
+    String status = 'fetchCekSecret returned null (see logs).';
+    if (result != null) {
       if (kDebugMode) {
         debugPrint('CEK secret response: $result');
       }
-      String baseMessage;
-      if (kDebugMode) {
-        baseMessage = 'Success (debug): $result';
-      } else {
-        baseMessage = 'Success: received keys ${result.keys.join(', ')}';
-      }
-
+      status = 'Received response';
       final userCodeB64 = _sdkSecretModule.extractUserCode(result);
       if (userCodeB64 != null) {
         if (!_sdkSecretModule.hasUserName) {
-          baseMessage += ' Missing EXAMPLE_USER_NAME, not storing user code.';
+          status = 'Missing EXAMPLE_USER_NAME to save user code.';
         } else {
           try {
             await UserCodeChannel.saveUserCode(
               userName: _sdkSecretModule.userName,
               userCodeB64: userCodeB64,
             );
-            baseMessage +=
-                ' Stored user code for ${_sdkSecretModule.userName}.';
+            status = 'User code stored';
+            _userCodeReady = true;
           } catch (error) {
-            baseMessage += ' Failed to store user code: $error';
+            status = 'Failed to store user code: $error';
           }
         }
       } else {
-        baseMessage += ' Response missing userCodeB64 field.';
+        status = 'Response missing userCodeB64 field.';
       }
-      nextStatus = baseMessage;
     }
 
     setState(() {
       _fetchingCekSecret = false;
-      _cekSecretStatus = nextStatus;
+      _cekSecretStatus = status;
     });
   }
 
@@ -121,37 +113,33 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: EmotionDetectorView(controller: controller),
-              ),
-            ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ElevatedButton(
-                    onPressed: _fetchingCekSecret ? null : _fetchCekSecret,
-                    child: Text(
-                      _fetchingCekSecret
-                          ? 'Fetching SDK secret...'
-                          : 'Fetch SDK CEK secret',
-                    ),
+        body: _userCodeReady
+            ? EmotionDetectorView(controller: controller)
+            : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 24),
+                      Text(
+                        _cekSecretStatus,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: _fetchingCekSecret ? null : _fetchCekSecret,
+                        child: Text(
+                          _fetchingCekSecret
+                              ? 'Fetching SDK secret...'
+                              : 'Fetch SDK CEK secret',
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _cekSecretStatus,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
