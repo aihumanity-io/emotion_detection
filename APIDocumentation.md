@@ -148,6 +148,23 @@ final cek = await CekSecretClient.fetchCekSecret(
 * When the call fails or returns malformed JSON the method logs via
   `debugPrint` and resolves to `null`.
 
+### `UserCodeChannel.saveUserCode`
+
+Bridges user code delivery from Dart into the platform keychain. Call it after
+your backend returns a 32-byte base64 user code so iOS can satisfy
+`obtainCEK_UserCodeGateSync` during model load.
+
+```dart
+await UserCodeChannel.saveUserCode(
+  userName: 'dev@tartalabs.io',
+  userCodeB64: cekPayload['userCodeB64'] as String,
+);
+```
+
+`clearUserCode(userName)` removes the cached entry if you need to reset state
+between accounts. Both methods operate on the same MethodChannel as
+`EmotionDetectionController` (`face_emotion_detection`).
+
 ---
 
 ## Notes & constraints

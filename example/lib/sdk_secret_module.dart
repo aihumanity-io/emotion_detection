@@ -10,8 +10,7 @@ const String _exampleSdkKeySecret = String.fromEnvironment(
 );
 const String _exampleModelKey = String.fromEnvironment(
   'EXAMPLE_MODEL_KEY',
-  defaultValue: 'mobilenetv1_fer2024-11-06-08-48-50'
-  //defaultValue: '=aih_fer2025',
+  defaultValue: 'mobilenetv1_fer2024-11-06-08-48-50',
 );
 const String _exampleAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD',
@@ -20,6 +19,10 @@ const String _exampleAad = String.fromEnvironment(
 const String _exampleOverrideBase = String.fromEnvironment(
   'EXAMPLE_SERVER_BASE_URL',
   defaultValue: 'https://tartalabapi.onrender.com',
+);
+const String _exampleUserName = String.fromEnvironment(
+  'EXAMPLE_USER_NAME',
+  defaultValue: 'dev@tartalabs.io',
 );
 
 /// Simple wrapper used by the example app to demonstrate
@@ -31,17 +34,20 @@ class ExampleSdkSecretModule {
     String? modelKey,
     String? aad,
     String? overrideBaseUrl,
+    String? userName,
   })  : _apiKeyId = apiKeyId ?? _exampleSdkKeyId,
         _apiKeySecret = apiKeySecret ?? _exampleSdkKeySecret,
         _modelKey = modelKey ?? _exampleModelKey,
         _aad = aad ?? _exampleAad,
-        _overrideBaseUrl = overrideBaseUrl ?? _exampleOverrideBase;
+        _overrideBaseUrl = overrideBaseUrl ?? _exampleOverrideBase,
+        _userName = userName ?? _exampleUserName;
 
   final String _apiKeyId;
   final String _apiKeySecret;
   final String _modelKey;
   final String _aad;
   final String _overrideBaseUrl;
+  final String _userName;
 
   Future<Map<String, dynamic>?> fetchCekSecret() {
     return CekSecretClient.fetchCekSecret(
@@ -55,4 +61,23 @@ class ExampleSdkSecretModule {
 
   bool get hasRequiredConfig =>
       _apiKeyId.isNotEmpty && _apiKeySecret.isNotEmpty && _modelKey.isNotEmpty;
+
+  String get userName => _userName;
+
+  bool get hasUserName => userName.isNotEmpty;
+
+  String? extractUserCode(Map<String, dynamic> payload) {
+    for (final key in const [
+      'userCodeB64',
+      'user32B64',
+      'user32',
+      'user_code_b64'
+    ]) {
+      final value = payload[key];
+      if (value is String && value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
 }

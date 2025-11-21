@@ -28,6 +28,12 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         case "faceEmotion":
             self.faceEmotionDetection(result: result, call: call)
 
+        case "setUserCode":
+            handleSetUserCode(call: call, result: result)
+
+        case "clearUserCode":
+            handleClearUserCode(call: call, result: result)
+
             
         default:
             result(FlutterMethodNotImplemented)
@@ -155,6 +161,36 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         //let documentsDirectory = paths[0]
         return paths!
+    }
+
+    private func handleSetUserCode(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let userName = args["userName"] as? String,
+              let userCodeB64 = args["userCodeB64"] as? String else {
+            result(FlutterError(code: "invalid_args", message: "userName and userCodeB64 are required", details: nil))
+            return
+        }
+        let requireBiometrics = args["requireBiometrics"] as? Bool ?? false
+        do {
+            try UserCodeBridge.saveUserCode(b64: userCodeB64, userName: userName, requireBiometrics: requireBiometrics)
+            result(nil)
+        } catch {
+            result(FlutterError(code: "user_code_error", message: error.localizedDescription, details: nil))
+        }
+    }
+
+    private func handleClearUserCode(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let userName = args["userName"] as? String else {
+            result(FlutterError(code: "invalid_args", message: "userName is required", details: nil))
+            return
+        }
+        do {
+            try UserCodeBridge.clearUserCode(userName: userName)
+            result(nil)
+        } catch {
+            result(FlutterError(code: "user_code_error", message: error.localizedDescription, details: nil))
+        }
     }
 
 

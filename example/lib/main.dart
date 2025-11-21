@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:emotion_detection/emotion_detection.dart';
+import 'package:emotion_detection/native/user_code_channel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -71,18 +72,45 @@ class _MyAppState extends State<MyApp> {
       _cekSecretStatus = 'Requesting /sdk/cek-secret...';
     });
     final result = await _sdkSecretModule.fetchCekSecret();
+    String nextStatus;
+    if (result == null) {
+      nextStatus = 'fetchCekSecret returned null (see logs).';
+    } else {
+      if (kDebugMode) {
+        debugPrint('CEK secret response: $result');
+      }
+      String baseMessage;
+      if (kDebugMode) {
+        baseMessage = 'Success (debug): $result';
+      } else {
+        baseMessage = 'Success: received keys ${result.keys.join(', ')}';
+      }
+
+      final userCodeB64 = _sdkSecretModule.extractUserCode(result);
+      if (userCodeB64 != null) {
+        if (!_sdkSecretModule.hasUserName) {
+          baseMessage += ' Missing EXAMPLE_USER_NAME, not storing user code.';
+        } else {
+          try {
+            await UserCodeChannel.saveUserCode(
+              userName: _sdkSecretModule.userName,
+              userCodeB64: userCodeB64,
+            );
+            baseMessage +=
+                ' Stored user code for ${_sdkSecretModule.userName}.';
+          } catch (error) {
+            baseMessage += ' Failed to store user code: $error';
+          }
+        }
+      } else {
+        baseMessage += ' Response missing userCodeB64 field.';
+      }
+      nextStatus = baseMessage;
+    }
+
     setState(() {
       _fetchingCekSecret = false;
-      if (result == null) {
-        _cekSecretStatus = 'fetchCekSecret returned null (see logs).';
-      } else {
-        if (kDebugMode) {
-          debugPrint('CEK secret response: $result');
-          _cekSecretStatus = 'Success (debug): $result';
-        } else {
-          _cekSecretStatus = 'Success: received keys ${result.keys.join(', ')}';
-        }
-      }
+      _cekSecretStatus = nextStatus;
     });
   }
 

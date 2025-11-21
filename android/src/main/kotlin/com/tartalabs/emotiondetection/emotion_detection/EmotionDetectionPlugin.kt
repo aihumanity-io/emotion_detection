@@ -111,6 +111,26 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
         result.error("UNAVAILABLE", "emotion not available.", null)
       }
 
+    } else if(call.method == "setUserCode") {
+      val userCodeB64 = call.argument<String>("userCodeB64")
+      if (userCodeB64.isNullOrBlank()) {
+        result.error("invalid_args", "userCodeB64 is required", null)
+        return
+      }
+      try {
+        val decoded = Base64.decode(userCodeB64.trim(), Base64.NO_WRAP)
+        if (decoded.size != 32) {
+          result.error("invalid_length", "userCode must be 32 bytes", null)
+          return
+        }
+        licMgr.saveUserCode(decoded)
+        result.success(null)
+      } catch (e: IllegalArgumentException) {
+        result.error("invalid_base64", "Failed to decode userCodeB64", e.localizedMessage)
+      }
+    } else if(call.method == "clearUserCode") {
+      licMgr.clearSecrets()
+      result.success(null)
     } else {
       result.notImplemented()
     }
