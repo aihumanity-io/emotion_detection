@@ -42,7 +42,10 @@ class EmotionMobilenet: MLBase {
     var emotionBuffer = [Int]()
     let nAverage = 3
             
-    override init() throws {
+    private let userName: String
+
+    init(userName: String) throws {
+        self.userName = userName
                 
         do
         {
@@ -52,13 +55,13 @@ class EmotionMobilenet: MLBase {
             let fw = frameworkBundle()
             print("Using bundle: \(fw.bundlePath)")
             
-            let currentUserName = "dev@tartalabs.io"
+            let currentUserName = UserCodeUtils.sanitize(userName: userName)
             let manifest: Manifest = try loadManifestJSON(fromBundle: "mobilenetv1_fer2024-11-06-08-48-50.manifest.manifest")
 
             let cekData = try obtainCEK_UserCodeGateSync(
                 manifest: manifest,
                 userName: currentUserName,
-                user32Provider: { try User32SideLoad.loadUser32Data(bundle: .main) } // or plugin bundle
+                user32Provider: { try UserCodeUtils.loadUser32(userName: currentUserName) }
             )
 
             let model = try EncryptedModelLoader.loadFromBundle(
@@ -135,4 +138,3 @@ class EmotionMobilenet: MLBase {
     }
 
 }
-

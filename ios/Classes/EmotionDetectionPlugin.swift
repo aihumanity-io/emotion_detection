@@ -25,7 +25,7 @@ private enum UserCodeBridgeError: LocalizedError {
 @available(iOS 15.0, *)
 private enum UserCodeBridge {
     static func saveUserCode(b64: String, userName: String, requireBiometrics: Bool) throws {
-        let account = sanitize(userName: userName)
+        let account = UserCodeUtils.sanitize(userName: userName)
         guard !account.isEmpty else { throw UserCodeBridgeError.emptyAccount }
         let trimmed = b64.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let decoded = Data(base64Encoded: trimmed) else {
@@ -36,13 +36,26 @@ private enum UserCodeBridge {
     }
 
     static func clearUserCode(userName: String) throws {
-        let account = sanitize(userName: userName)
+        let account = UserCodeUtils.sanitize(userName: userName)
         guard !account.isEmpty else { throw UserCodeBridgeError.emptyAccount }
         try User32Store.delete(account: account)
     }
+}
 
-    private static func sanitize(userName: String) -> String {
-        userName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+@available(iOS 15.0, *)
+private extension EmotionDetectionPlugin {
+    static func resetModels() {
+        emotionModelMobilenet = nil
+        ahiEmotionModel = nil
+    }
+
+    func ensureModelsReady() throws {
+        if EmotionDetectionPlugin.ahiEmotionModel == nil {
+            EmotionDetectionPlugin.ahiEmotionModel = try AIHFerModel(userName: EmotionDetectionPlugin.currentUserName)
+        }
+        if EmotionDetectionPlugin.emotionModelMobilenet == nil {
+            EmotionDetectionPlugin.emotionModelMobilenet = try EmotionMobilenet(userName: EmotionDetectionPlugin.currentUserName)
+        }
     }
 }
 
@@ -51,11 +64,10 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
     var image_count = 0
     static private var emotionModelMobilenet: EmotionMobilenet?
     static private var ahiEmotionModel: AIHFerModel?
+    static private var currentUserName: String = UserCodeUtils.sanitize(userName: "dev@tartalabs.io")
 
 
   public static func register(with registrar: FlutterPluginRegistrar) {
-    try! ahiEmotionModel = AIHFerModel()
-      try! emotionModelMobilenet = EmotionMobilenet()
     let channel = FlutterMethodChannel(name: "face_emotion_detection", binaryMessenger: registrar.messenger())
     let instance = EmotionDetectionPlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
@@ -83,6 +95,12 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
     }
 
     func faceEmotionDetection(result: @escaping FlutterResult, call: FlutterMethodCall) {
+        do {
+            try ensureModelsReady()
+        } catch {
+            result(FlutterError(code: "model_load_error", message: error.localizedDescription, details: nil))
+            return
+        }
        /*
         guard let modelURL = Bundle.main.url(forResource: "AIHFerModel", withExtension: "mlpackage") else {
                 result(FlutterError(code: "MODEL_NOT_FOUND", message: "Could not find model", details: nil))
@@ -215,6 +233,8 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         let requireBiometrics = args["requireBiometrics"] as? Bool ?? false
         do {
             try UserCodeBridge.saveUserCode(b64: userCodeB64, userName: userName, requireBiometrics: requireBiometrics)
+            EmotionDetectionPlugin.currentUserName = UserCodeUtils.sanitize(userName: userName)
+            EmotionDetectionPlugin.resetModels()
             result(nil)
         } catch {
             result(FlutterError(code: "user_code_error", message: error.localizedDescription, details: nil))
@@ -229,6 +249,7 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         }
         do {
             try UserCodeBridge.clearUserCode(userName: userName)
+            EmotionDetectionPlugin.resetModels()
             result(nil)
         } catch {
             result(FlutterError(code: "user_code_error", message: error.localizedDescription, details: nil))

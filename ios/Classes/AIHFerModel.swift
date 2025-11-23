@@ -40,7 +40,10 @@ class AIHFerModel: MLBase {
     var emotionBuffer = [Int]()
     let nAverage = 3
             
-    override init()  throws {
+    private let userName: String
+
+    init(userName: String)  throws {
+        self.userName = userName
                 
         do
         {
@@ -80,7 +83,7 @@ class AIHFerModel: MLBase {
 */
             
             // One-time reset (dev) – deletes old wrapped CEK + KEK for the old tag
-           /* try? SecItemDelete([
+           /*try? SecItemDelete([
               kSecClass as String: kSecClassGenericPassword,
               kSecAttrService as String: "com.creataai.emotionsdk.model.ceks",
               kSecAttrAccount as String: "aih_fer20250115_v2025-01-15"
@@ -91,9 +94,12 @@ class AIHFerModel: MLBase {
               kSecClass as String: kSecClassKey,
               kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
               kSecAttrApplicationTag as String: oldTagData
-            ] as CFDictionary)
-                                       */
-
+            ] as CFDictionary)*/
+                                       
+            try! User32Store.delete(account: "dev@tartalabs.io")
+            print("user code deleted")
+            //throw NSError()
+            
             do {
                 let user32 = try User32SideLoad.loadUser32Data(bundle: .main/* .main or plugin bundle */)
                 assert(user32.count == 32)
@@ -102,13 +108,13 @@ class AIHFerModel: MLBase {
                 print("Failed to load user32:", error)
             }
 
-            let currentUserName = "dev@tartalabs.io"
+            let currentUserName = UserCodeUtils.sanitize(userName: userName)
             let manifest: Manifest = try loadManifestJSON(fromBundle: "aih_fer20250115.manifest")
 
             let cekData = try obtainCEK_UserCodeGateSync(
                 manifest: manifest,
                 userName: currentUserName,
-                user32Provider: { try User32SideLoad.loadUser32Data(bundle: .main) } // or plugin bundle
+                user32Provider: { try UserCodeUtils.loadUser32(userName: currentUserName) }
             )
             
                 // this is another way to load the model
@@ -200,4 +206,3 @@ class AIHFerModel: MLBase {
     }
 
 }
-

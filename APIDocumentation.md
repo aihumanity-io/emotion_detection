@@ -157,7 +157,7 @@ your backend returns a 32-byte base64 user code so iOS can satisfy
 ```dart
 await UserCodeChannel.saveUserCode(
   userName: 'dev@tartalabs.io',
-  userCodeB64: cekPayload['userCodeB64'] as String,
+  userCodeB64: (cekPayload['userCodeB64'] ?? cekPayload['userSecretB64']) as String,
 );
 ```
 
