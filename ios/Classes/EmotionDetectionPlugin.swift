@@ -43,6 +43,21 @@ private enum UserCodeBridge {
 }
 
 @available(iOS 15.0, *)
+enum UserCodeUtils {
+    static func sanitize(userName: String) -> String {
+        userName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    static func loadUser32(userName: String) throws -> Data {
+        let acct = sanitize(userName: userName)
+        if let cached = try? User32Store.load(account: acct) {
+            return cached
+        }
+        return try User32SideLoad.loadUser32Data(bundle: .main)
+    }
+}
+
+@available(iOS 15.0, *)
 private extension EmotionDetectionPlugin {
     static func resetModels() {
         emotionModelMobilenet = nil
@@ -87,6 +102,12 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
 
         case "clearUserCode":
             handleClearUserCode(call: call, result: result)
+
+        case "setKeyShard":
+            handleSetKeyShard(call: call, result: result)
+
+        case "clearKeyShard":
+            handleClearKeyShard(call: call, result: result)
 
             
         default:
@@ -254,6 +275,32 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         } catch {
             result(FlutterError(code: "user_code_error", message: error.localizedDescription, details: nil))
         }
+    }
+
+    private func handleSetKeyShard(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let modelId = args["modelId"] as? String,
+              let shardB64 = args["keyShardB64"] as? String else {
+            result(FlutterError(code: "invalid_args", message: "modelId and keyShardB64 are required", details: nil))
+            return
+        }
+        let expiresAtMs = (args["expiresAtMs"] as? NSNumber)?.int64Value ?? (args["expiresAt"] as? NSNumber)?.int64Value
+        do {
+            try ShardCache.setShard(modelId: modelId, base64: shardB64, expiresAtMs: expiresAtMs)
+            result(nil)
+        } catch {
+            result(FlutterError(code: "shard_store_error", message: error.localizedDescription, details: nil))
+        }
+    }
+
+    private func handleClearKeyShard(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let modelId = args["modelId"] as? String else {
+            result(FlutterError(code: "invalid_args", message: "modelId is required", details: nil))
+            return
+        }
+        ShardCache.clearShard(modelId: modelId)
+        result(nil)
     }
 
 

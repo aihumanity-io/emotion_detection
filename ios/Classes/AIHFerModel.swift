@@ -96,9 +96,10 @@ class AIHFerModel: MLBase {
               kSecAttrApplicationTag as String: oldTagData
             ] as CFDictionary)*/
                                        
-            try! User32Store.delete(account: "dev@tartalabs.io")
+            /// clear the code cache
+            /*try! User32Store.delete(account: "dev@tartalabs.io")
             print("user code deleted")
-            //throw NSError()
+            //throw NSError()*/
             
             do {
                 let user32 = try User32SideLoad.loadUser32Data(bundle: .main/* .main or plugin bundle */)

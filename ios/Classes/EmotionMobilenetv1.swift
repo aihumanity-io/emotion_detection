@@ -77,7 +77,7 @@ class EmotionMobilenet: MLBase {
         catch {
             let ns = error as NSError
             let log = Logger(subsystem: "com.creataai.emotionsdk", category: "model")
-            log.logUnknown(ns, context: "aih_fer model loading")
+            log.logUnknown(ns, context: "mobilenetv1_fer2024 model loading")
             throw MLError.Error("Failed to find model file.")
         }
  

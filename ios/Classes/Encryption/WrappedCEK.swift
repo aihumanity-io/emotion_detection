@@ -97,8 +97,11 @@ enum User32Store {
 }
 
 @available(iOS 14.0, *)
-func deriveKEK(user32: Data, aad: String, kdfInfo: String) -> SymmetricKey {
-    HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: user32),
+func deriveKEK(user32: Data, shard: Data?, aad: String, kdfInfo: String) -> SymmetricKey {
+    var ikm = Data()
+    ikm.append(user32)
+    if let shard = shard { ikm.append(shard) }
+    return HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: ikm),
         salt: Data(aad.utf8), info: Data(kdfInfo.utf8), outputByteCount: 32)
 }
 
@@ -108,10 +111,14 @@ func unwrapCEK_fromManifest(wrappedCEK_B64: String, kek: SymmetricKey, aad: Stri
     return try AES.GCM.open(box, using: kek, authenticating: Data(aad.utf8))
 }
 struct Manifest: Decodable {
+    let model_name: String?
+    let model_id: String?
     let enc_sha256: String
     let aad: String
     let wrapped_cek_b64: String
     let kdf_info: String
+    let shard_required: Bool?
+    let expiry_epoch_ms: Int?
     // … other fields you already have
 }
 
@@ -130,14 +137,38 @@ user32Supplier: () async throws -> Data  // server fetch or side-loaded file
     }()
 
     // Derive KEK and unwrap CEK
-    let kek = deriveKEK(user32: user32, aad: manifest.aad, kdfInfo: manifest.kdf_info)
+    let kek = deriveKEK(user32: user32, shard: nil, aad: manifest.aad, kdfInfo: manifest.kdf_info)
     let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: manifest.wrapped_cek_b64,
         kek: kek, aad: manifest.aad)
     return cek
 }*/
 
 // Errors you already use can replace this
-enum UserGateError: Error { case manifestMissingFields, invalidUser32 }
+enum UserGateError: Error { case manifestMissingFields, invalidUser32, missingShard, shardExpired }
+
+private func activeShard(for manifest: Manifest, now: Date = Date()) -> CekShardLease? {
+    let candidates = [manifest.model_id, manifest.model_name].compactMap { $0 }
+    return ShardCache.activeShard(for: candidates, now: now)
+}
+
+@available(iOS 14.0, *)
+private func resolveShardLease(from manifest: Manifest, now: Date = Date()) throws -> CekShardLease? {
+    if let manifestExpiry = manifest.expiry_epoch_ms {
+        let expiryDate = Date(timeIntervalSince1970: TimeInterval(manifestExpiry) / 1000.0)
+        if now >= expiryDate {
+            throw UserGateError.shardExpired
+        }
+    }
+
+    let lease = activeShard(for: manifest, now: now)
+    if manifest.shard_required == true && lease == nil {
+        throw UserGateError.missingShard
+    }
+    if let lease = lease, lease.isExpired(now: now) {
+        throw UserGateError.shardExpired
+    }
+    return lease
+}
 
 /// Async supplier version (server or side-loaded async)
 @available(iOS 14.0, *)
@@ -171,15 +202,15 @@ func obtainCEK_UserCodeGate(
     } else {
         // Fallback on earlier versions
     } }*/
-    let aad     = manifest.aad
-        let wrapped = manifest.wrapped_cek_b64
-        let kdfInfo = manifest.kdf_info
-        guard !aad.isEmpty, !wrapped.isEmpty, !kdfInfo.isEmpty else {
-            throw UserGateError.manifestMissingFields
-        }
+    let aad = manifest.aad
+    let wrapped = manifest.wrapped_cek_b64
+    let kdfInfo = manifest.kdf_info
+    guard !aad.isEmpty, !wrapped.isEmpty, !kdfInfo.isEmpty else {
+        throw UserGateError.manifestMissingFields
+    }
 
-
-    let kek = deriveKEK(user32: user32, aad: aad, kdfInfo: kdfInfo)
+    let shardLease = try resolveShardLease(from: manifest)
+    let kek = deriveKEK(user32: user32, shard: shardLease?.shard, aad: aad, kdfInfo: kdfInfo)
     let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aad)
     return cek
 }
@@ -220,14 +251,15 @@ func obtainCEK_UserCodeGateSync(
     }
 
     // If your Manifest fields are optionals, switch to guard lets
-    let aad     = manifest.aad
+    let aad = manifest.aad
     let wrapped = manifest.wrapped_cek_b64
     let kdfInfo = manifest.kdf_info
     guard !aad.isEmpty, !wrapped.isEmpty, !kdfInfo.isEmpty else {
         throw UserGateError.manifestMissingFields
     }
 
-    let kek = deriveKEK(user32: user32, aad: aad, kdfInfo: kdfInfo)
+    let shardLease = try resolveShardLease(from: manifest)
+    let kek = deriveKEK(user32: user32, shard: shardLease?.shard, aad: aad, kdfInfo: kdfInfo)
     let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aad)
     return cek
 }

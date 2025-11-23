@@ -66,6 +66,8 @@ class ExampleSdkSecretModule {
 
   bool get hasUserName => userName.isNotEmpty;
 
+  String get modelKey => _modelKey;
+
   String? extractUserCode(Map<String, dynamic> payload) {
     for (final key in const [
       'userCodeB64',
@@ -77,6 +79,35 @@ class ExampleSdkSecretModule {
       final value = payload[key];
       if (value is String && value.isNotEmpty) {
         return value;
+      }
+    }
+    return null;
+  }
+
+  String? extractShard(Map<String, dynamic> payload) {
+    for (final key in const [
+      'cekShardB64',
+      'keyShardB64',
+      'shardB64',
+      'cekShard',
+      'cek_shard_b64'
+    ]) {
+      final value = payload[key];
+      if (value is String && value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  int? extractExpiresAtMs(Map<String, dynamic> payload) {
+    for (final key in const ['expiresAt', 'expires_at', 'expiry_epoch_ms']) {
+      final value = payload[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.toInt();
       }
     }
     return null;

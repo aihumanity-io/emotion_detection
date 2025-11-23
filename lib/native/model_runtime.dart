@@ -24,9 +24,17 @@ class ModelRuntime {
       });
 
   static Future<void> setKeyShard(
-          {required String modelId, required String keyShardB64}) =>
-      _ch.invokeMethod(
-          'setKeyShard', {'modelId': modelId, 'keyShardB64': keyShardB64});
+          {required String modelId,
+          required String keyShardB64,
+          int? expiresAtMs}) =>
+      _ch.invokeMethod('setKeyShard', {
+        'modelId': modelId,
+        'keyShardB64': keyShardB64,
+        if (expiresAtMs != null) 'expiresAtMs': expiresAtMs,
+      });
+
+  static Future<void> clearKeyShard(String modelId) =>
+      _ch.invokeMethod('clearKeyShard', {'modelId': modelId});
 
   static Future<bool> warmUp(String modelId) async =>
       (await _ch.invokeMethod('warmUp', {'modelId': modelId})) == true;

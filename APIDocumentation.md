@@ -131,7 +131,8 @@ typedef OnImage     = Image Function(imagelib.Image? image);
 
 Utility for calling `GET /sdk/cek-secret` with your SDK key pair. Signs the
 request using `Hmac(sha256)` and returns the decoded JSON payload when the
-response is `200`.
+response is `200`. The service may return fields such as `userSecretB64` (user
+code), `cekShardB64` (server-held shard), and `expiresAt` (ms epoch).
 
 ```dart
 final cek = await CekSecretClient.fetchCekSecret(
@@ -164,6 +165,23 @@ await UserCodeChannel.saveUserCode(
 `clearUserCode(userName)` removes the cached entry if you need to reset state
 between accounts. Both methods operate on the same MethodChannel as
 `EmotionDetectionController` (`face_emotion_detection`).
+
+### `ModelRuntime.setKeyShard`
+
+Stores the server-provided shard lease in memory for the current process so
+wrapped CEKs can only be unwrapped with a fresh shard. Shards are not persisted
+and expire based on the `expiresAt` timestamp you pass.
+
+```dart
+await ModelRuntime.setKeyShard(
+  modelId: 'mobilenetv1_fer2024-11-06-08-48-50',
+  keyShardB64: cekPayload['cekShardB64'] as String,
+  expiresAtMs: cekPayload['expiresAt'] as int?,
+);
+```
+
+If the manifest contains `"shard_required": true` and no valid shard is
+present, the iOS loader refuses to unwrap the CEK until a fresh shard is set.
 
 ---
 

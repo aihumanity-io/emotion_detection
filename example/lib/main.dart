@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:emotion_detection/emotion_detection.dart';
+import 'package:emotion_detection/native/model_runtime.dart';
 import 'package:emotion_detection/native/user_code_channel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +28,7 @@ class _MyAppState extends State<MyApp> {
   final _emotionDetectionPlugin = EmotionDetection();
   EmotionDetectorViewController controller = EmotionDetectorViewController();
   final ExampleSdkSecretModule _sdkSecretModule = ExampleSdkSecretModule();
+  static const _methodChannelName = 'face_emotion_detection';
   String _cekSecretStatus = 'Not requested yet.';
   bool _fetchingCekSecret = false;
   bool _userCodeReady = false;
@@ -59,6 +61,10 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  void _ensureModelRuntimeChannel() {
+    ModelRuntime(_methodChannelName);
+  }
+
   Future<void> _fetchCekSecret() async {
     if (!_sdkSecretModule.hasRequiredConfig) {
       setState(() {
@@ -80,17 +86,35 @@ class _MyAppState extends State<MyApp> {
       }
       status = 'Received response';
       final userCodeB64 = _sdkSecretModule.extractUserCode(result);
+      final shardB64 = _sdkSecretModule.extractShard(result);
+      final expiresAtMs = _sdkSecretModule.extractExpiresAtMs(result);
       if (userCodeB64 != null) {
         if (!_sdkSecretModule.hasUserName) {
           status = 'Missing EXAMPLE_USER_NAME to save user code.';
         } else {
           try {
+            _ensureModelRuntimeChannel();
             await UserCodeChannel.saveUserCode(
               userName: _sdkSecretModule.userName,
               userCodeB64: userCodeB64,
             );
             status = 'User code stored';
             _userCodeReady = true;
+            if (shardB64 != null) {
+              try {
+                await ModelRuntime.setKeyShard(
+                  modelId: _sdkSecretModule.modelKey,
+                  keyShardB64: shardB64,
+                  expiresAtMs: expiresAtMs,
+                );
+                status = 'User code + shard stored';
+              } catch (error) {
+                status = 'User code stored; shard failed: $error';
+                _userCodeReady = false;
+              }
+            } else {
+              status = 'User code stored (no shard in response).';
+            }
           } catch (error) {
             status = 'Failed to store user code: $error';
           }
