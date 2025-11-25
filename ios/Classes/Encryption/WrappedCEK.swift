@@ -1,5 +1,64 @@
 import Security
 import CryptoKit
+import Foundation
+
+struct CekShardLease {
+    let shard: Data
+    let expiresAt: Date?
+
+    func isExpired(now: Date = Date()) -> Bool {
+        guard let exp = expiresAt else { return false }
+        return now >= exp
+    }
+}
+
+enum ShardCacheError: Error { case invalidBase64, emptyShard }
+
+enum ShardCache {
+    private static var shards: [String: CekShardLease] = [:]
+    private static let lock = NSLock()
+
+    static func setShard(modelId rawModelId: String, base64: String, expiresAtMs: Int64?) throws {
+        let modelId = rawModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !modelId.isEmpty else { throw ShardCacheError.invalidBase64 }
+        guard let data = Data(base64Encoded: base64) else { throw ShardCacheError.invalidBase64 }
+        guard !data.isEmpty else { throw ShardCacheError.emptyShard }
+
+        let expiry: Date?
+        if let ms = expiresAtMs {
+            expiry = Date(timeIntervalSince1970: TimeInterval(ms) / 1000.0)
+        } else {
+            expiry = nil
+        }
+
+        let lease = CekShardLease(shard: data, expiresAt: expiry)
+        lock.lock(); defer { lock.unlock() }
+        shards[modelId] = lease
+        print("ShardCache: stored shard for id=\(modelId) bytes=\(data.count) exp=\(expiry?.timeIntervalSince1970 ?? -1)")
+    }
+
+    static func clearShard(modelId rawModelId: String) {
+        let modelId = rawModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !modelId.isEmpty else { return }
+        lock.lock(); defer { lock.unlock() }
+        shards.removeValue(forKey: modelId)
+    }
+
+    static func activeShard(for identifiers: [String], now: Date = Date()) -> CekShardLease? {
+        lock.lock(); defer { lock.unlock() }
+        for id in identifiers {
+            let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, let lease = shards[trimmed] else { continue }
+            if lease.isExpired(now: now) {
+                shards.removeValue(forKey: trimmed)
+                continue
+            }
+            print("ShardCache: hit id=\(trimmed) exp=\(lease.expiresAt?.timeIntervalSince1970 ?? -1)")
+            return lease
+        }
+        return nil
+    }
+}
 enum User32StoreErr: Error { case notFound, badStatus(OSStatus) }
 
 enum User32Store {
@@ -119,7 +178,32 @@ struct Manifest: Decodable {
     let kdf_info: String
     let shard_required: Bool?
     let expiry_epoch_ms: Int?
-    // … other fields you already have
+
+    private enum CodingKeys: String, CodingKey {
+        case model_name
+        case model_id
+        case enc_sha256
+        case aad
+        case wrapped_cek_b64
+        case kdf_info
+        case shard_required
+        case shardRequired
+        case expiry_epoch_ms
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        model_name = try c.decodeIfPresent(String.self, forKey: .model_name)
+        model_id = try c.decodeIfPresent(String.self, forKey: .model_id)
+        enc_sha256 = try c.decode(String.self, forKey: .enc_sha256)
+        aad = try c.decode(String.self, forKey: .aad)
+        wrapped_cek_b64 = try c.decode(String.self, forKey: .wrapped_cek_b64)
+        kdf_info = try c.decode(String.self, forKey: .kdf_info)
+        let shardSnake = try c.decodeIfPresent(Bool.self, forKey: .shard_required)
+        let shardCamel = try c.decodeIfPresent(Bool.self, forKey: .shardRequired)
+        shard_required = shardSnake ?? shardCamel
+        expiry_epoch_ms = try c.decodeIfPresent(Int.self, forKey: .expiry_epoch_ms)
+    }
 }
 
 @available(iOS 14.0, *)
@@ -146,25 +230,30 @@ user32Supplier: () async throws -> Data  // server fetch or side-loaded file
 // Errors you already use can replace this
 enum UserGateError: Error { case manifestMissingFields, invalidUser32, missingShard, shardExpired }
 
-private func activeShard(for manifest: Manifest, now: Date = Date()) -> CekShardLease? {
-    let candidates = [manifest.model_id, manifest.model_name].compactMap { $0 }
+private func activeShard(for manifest: Manifest, userName: String, now: Date = Date()) -> CekShardLease? {
+    let sanitizedUser = UserCodeUtils.sanitize(userName: userName)
+    let candidates = [manifest.model_id, manifest.model_name, sanitizedUser].compactMap { $0 }
+    print("Shard lookup candidates: \(candidates)")
     return ShardCache.activeShard(for: candidates, now: now)
 }
 
 @available(iOS 14.0, *)
-private func resolveShardLease(from manifest: Manifest, now: Date = Date()) throws -> CekShardLease? {
+private func resolveShardLease(from manifest: Manifest, userName: String, now: Date = Date()) throws -> CekShardLease? {
     if let manifestExpiry = manifest.expiry_epoch_ms {
         let expiryDate = Date(timeIntervalSince1970: TimeInterval(manifestExpiry) / 1000.0)
         if now >= expiryDate {
+            print("Shard: manifest expiry reached for \(manifest.model_id ?? manifest.model_name ?? "<unknown>")")
             throw UserGateError.shardExpired
         }
     }
 
-    let lease = activeShard(for: manifest, now: now)
+    let lease = activeShard(for: manifest, userName: userName, now: now)
     if manifest.shard_required == true && lease == nil {
+        print("Shard: required but missing for \(manifest.model_id ?? manifest.model_name ?? "<unknown>")")
         throw UserGateError.missingShard
     }
     if let lease = lease, lease.isExpired(now: now) {
+        print("Shard: found but expired for \(manifest.model_id ?? manifest.model_name ?? "<unknown>")")
         throw UserGateError.shardExpired
     }
     return lease
@@ -182,12 +271,14 @@ func obtainCEK_UserCodeGate(
     // 1) Load cached user32 or fetch & cache
     let user32: Data
     if let cached = try? User32Store.load(account: acct) {
+        print("User32: loaded cached for \(acct) bytes=\(cached.count)")
         user32 = cached
     } else {
         let fetched = try await user32Supplier()
         guard fetched.count == 32 else {
             throw UserGateError.invalidUser32
        }
+        print("User32: fetched via supplier for \(acct) bytes=\(fetched.count)")
         try User32Store.save(fetched, account: acct, requireBiometrics: false)
         user32 = fetched
     }
@@ -209,8 +300,15 @@ func obtainCEK_UserCodeGate(
         throw UserGateError.manifestMissingFields
     }
 
-    let shardLease = try resolveShardLease(from: manifest)
-    let kek = deriveKEK(user32: user32, shard: shardLease?.shard, aad: aad, kdfInfo: kdfInfo)
+    let shardLease = try resolveShardLease(from: manifest, userName: userName)
+    let useShard = manifest.shard_required == true
+    let shardData = useShard ? shardLease?.shard : nil
+    if useShard {
+        print("KEK: using shard bytes=\(shardData?.count ?? 0)")
+    } else if shardLease != nil {
+        print("KEK: ignoring optional shard; manifest.shard_required=false")
+    }
+    let kek = deriveKEK(user32: user32, shard: shardData, aad: aad, kdfInfo: kdfInfo)
     let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aad)
     return cek
 }
@@ -242,10 +340,12 @@ func obtainCEK_UserCodeGateSync(
     // load cached or import and cache
     let user32: Data
     if let cached = try? User32Store.load(account: acct) {
+        print("User32: loaded cached for \(acct) bytes=\(cached.count)")
         user32 = cached
     } else {
         let fetched = try user32Provider()
         guard fetched.count == 32 else { throw UserGateError.invalidUser32 }
+        print("User32: fetched via provider for \(acct) bytes=\(fetched.count)")
         try User32Store.save(fetched, account: acct, requireBiometrics: false)
         user32 = fetched
     }
@@ -258,8 +358,15 @@ func obtainCEK_UserCodeGateSync(
         throw UserGateError.manifestMissingFields
     }
 
-    let shardLease = try resolveShardLease(from: manifest)
-    let kek = deriveKEK(user32: user32, shard: shardLease?.shard, aad: aad, kdfInfo: kdfInfo)
+    let shardLease = try resolveShardLease(from: manifest, userName: userName)
+    let useShard = manifest.shard_required == true
+    let shardData = useShard ? shardLease?.shard : nil
+    if useShard {
+        print("KEK: using shard bytes=\(shardData?.count ?? 0)")
+    } else if shardLease != nil {
+        print("KEK: ignoring optional shard; manifest.shard_required=false")
+    }
+    let kek = deriveKEK(user32: user32, shard: shardData, aad: aad, kdfInfo: kdfInfo)
     let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aad)
     return cek
 }

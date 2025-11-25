@@ -27,8 +27,10 @@ in bundle: Bundle = .main) throws -> Manifest {
         candidates.append((base, "manifest.json"))
     }
 
-    // Common variants
+    // Common variants (prefer shard-named manifests first)
     candidates += [
+        ("\(base)-shard", "manifest.json"),
+        ("\(base)_shard", "manifest.json"),
         (name, "json"),
         (base, "manifest.json"),
         (base, "json"),

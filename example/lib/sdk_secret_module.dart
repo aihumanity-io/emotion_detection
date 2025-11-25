@@ -1,17 +1,21 @@
 import 'package:emotion_detection/emotion_detection.dart';
 
 const String _exampleSdkKeyId = String.fromEnvironment(
-  'EXAMPLE_SDK_KEY_ID',
+  'SDK_KEY_ID',
   defaultValue: '',
 );
 const String _exampleSdkKeySecret = String.fromEnvironment(
-  'EXAMPLE_SDK_KEY_SECRET',
+  'SDK_KEY_SECRET',
   defaultValue: '',
 );
 const String _exampleModelKey = String.fromEnvironment(
   'EXAMPLE_MODEL_KEY',
   defaultValue: 'mobilenetv1_fer2024-11-06-08-48-50',
 );
+const List<String> _exampleModelKeys = <String>[
+  'aih_fer20250115',
+  'mobilenetv1_fer2024-11-06-08-48-50',
+];
 const String _exampleAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD',
   defaultValue: 'com.creataai.emotionsdk/ios',
@@ -25,6 +29,21 @@ const String _exampleUserName = String.fromEnvironment(
   defaultValue: 'dev@tartalabs.io',
 );
 
+/// Model-specific secret info extracted from the API payload.
+class ModelSecret {
+  ModelSecret({
+    required this.modelKey,
+    required this.shardB64,
+    this.expiresAtMs,
+    this.shardRequired,
+  });
+
+  final String modelKey;
+  final String shardB64;
+  final int? expiresAtMs;
+  final bool? shardRequired;
+}
+
 /// Simple wrapper used by the example app to demonstrate
 /// how to call [CekSecretClient.fetchCekSecret].
 class ExampleSdkSecretModule {
@@ -32,19 +51,27 @@ class ExampleSdkSecretModule {
     String? apiKeyId,
     String? apiKeySecret,
     String? modelKey,
+    List<String>? modelKeys,
     String? aad,
     String? overrideBaseUrl,
     String? userName,
   })  : _apiKeyId = apiKeyId ?? _exampleSdkKeyId,
         _apiKeySecret = apiKeySecret ?? _exampleSdkKeySecret,
-        _modelKey = modelKey ?? _exampleModelKey,
         _aad = aad ?? _exampleAad,
         _overrideBaseUrl = overrideBaseUrl ?? _exampleOverrideBase,
-        _userName = userName ?? _exampleUserName;
+        _userName = userName ?? _exampleUserName,
+        _modelKeys = (modelKeys != null && modelKeys.isNotEmpty)
+            ? modelKeys
+            : _exampleModelKeys,
+        _modelKey = modelKey ??
+            ((modelKeys != null && modelKeys.isNotEmpty)
+                ? modelKeys.first
+                : _exampleModelKey);
 
   final String _apiKeyId;
   final String _apiKeySecret;
   final String _modelKey;
+  final List<String> _modelKeys;
   final String _aad;
   final String _overrideBaseUrl;
   final String _userName;
@@ -59,14 +86,46 @@ class ExampleSdkSecretModule {
     );
   }
 
+  /// Fetch secrets for all configured model keys, returning the non-null
+  /// payloads in order. Each call only includes the shard for the requested
+  /// model key.
+  Future<List<CekSecretResult>> fetchAllCekSecrets() async {
+    final results = <CekSecretResult>[];
+    for (final key in _modelKeys) {
+      final res = await CekSecretClient.fetchCekSecret(
+        apiKeyId: _apiKeyId,
+        apiKeySecret: _apiKeySecret,
+        modelKey: key,
+        aad: _aad.isEmpty ? null : _aad,
+        overrideBaseUrl: _overrideBaseUrl.isEmpty ? null : _overrideBaseUrl,
+      );
+      if (res != null) {
+        results.add(CekSecretResult(modelKey: key, payload: res));
+      }
+    }
+    return results;
+  }
+
   bool get hasRequiredConfig =>
-      _apiKeyId.isNotEmpty && _apiKeySecret.isNotEmpty && _modelKey.isNotEmpty;
+      _apiKeyId.isNotEmpty &&
+      _apiKeySecret.isNotEmpty &&
+      _modelKeys.isNotEmpty &&
+      _modelKeys.first.isNotEmpty;
 
   String get userName => _userName;
 
   bool get hasUserName => userName.isNotEmpty;
 
   String get modelKey => _modelKey;
+
+  List<String> get modelKeys => _modelKeys;
+
+  /// Payload plus the modelKey it was requested with.
+  class CekSecretResult {
+    CekSecretResult({required this.modelKey, required this.payload});
+    final String modelKey;
+    final Map<String, dynamic> payload;
+  }
 
   String? extractUserCode(Map<String, dynamic> payload) {
     for (final key in const [
@@ -84,15 +143,80 @@ class ExampleSdkSecretModule {
     return null;
   }
 
-  String? extractShard(Map<String, dynamic> payload) {
+  String? extractModelKey(Map<String, dynamic> payload) {
+    final value = payload['modelKey'] ?? payload['model_id'] ?? payload['modelId'];
+    return value is String && value.isNotEmpty ? value : null;
+  }
+
+  /// Extract the shard for a given model. If [modelKey] is provided, this
+  /// first searches the `modelSecrets` array for a matching entry. Otherwise
+  /// it falls back to top-level shard fields.
+  String? extractShard(Map<String, dynamic> payload, {String? modelKey}) {
+    if (modelKey != null && modelKey.isNotEmpty) {
+      final secrets = extractModelSecrets(payload);
+      for (final secret in secrets) {
+        if (secret.modelKey == modelKey) {
+          return secret.shardB64;
+        }
+      }
+    }
+    return _extractShardFrom(payload);
+  }
+
+  int? extractExpiresAtMs(Map<String, dynamic> payload, {String? modelKey}) {
+    if (modelKey != null && modelKey.isNotEmpty) {
+      final secrets = extractModelSecrets(payload);
+      for (final secret in secrets) {
+        if (secret.modelKey == modelKey) {
+          return secret.expiresAtMs;
+        }
+      }
+    }
+    return _extractExpiresAt(payload);
+  }
+
+  /// Parse the `modelSecrets` array into typed entries.
+  List<ModelSecret> extractModelSecrets(Map<String, dynamic> payload) {
+    final list = payload['modelSecrets'];
+    if (list is! List) {
+      return const [];
+    }
+
+    final out = <ModelSecret>[];
+    for (final item in list) {
+      if (item is! Map<String, dynamic>) {
+        continue;
+      }
+      final modelKey = _readModelKey(item);
+      if (modelKey == null || modelKey.isEmpty) {
+        continue;
+      }
+      final shard = _extractShardFrom(item);
+      if (shard == null || shard.isEmpty) {
+        continue;
+      }
+      final expiresAtMs = _extractExpiresAt(item);
+      final shardRequired = _readShardRequired(item);
+      out.add(ModelSecret(
+        modelKey: modelKey,
+        shardB64: shard,
+        expiresAtMs: expiresAtMs,
+        shardRequired: shardRequired,
+      ));
+    }
+    return out;
+  }
+
+  String? _extractShardFrom(Map<String, dynamic> map) {
     for (final key in const [
+      'kekShardB64',
       'cekShardB64',
       'keyShardB64',
       'shardB64',
       'cekShard',
       'cek_shard_b64'
     ]) {
-      final value = payload[key];
+      final value = map[key];
       if (value is String && value.isNotEmpty) {
         return value;
       }
@@ -100,16 +224,37 @@ class ExampleSdkSecretModule {
     return null;
   }
 
-  int? extractExpiresAtMs(Map<String, dynamic> payload) {
-    for (final key in const ['expiresAt', 'expires_at', 'expiry_epoch_ms']) {
-      final value = payload[key];
+  int? _extractExpiresAt(Map<String, dynamic> map) {
+    for (final key in const [
+      'expiresAt',
+      'expires_at',
+      'expiry_epoch_ms',
+      'cekSecretExpiresAt'
+    ]) {
+      final value = map[key];
       if (value is int) {
         return value;
       }
       if (value is num) {
         return value.toInt();
       }
+      if (value is String) {
+        final parsed = DateTime.tryParse(value);
+        if (parsed != null) {
+          return parsed.millisecondsSinceEpoch;
+        }
+      }
     }
     return null;
+  }
+
+  String? _readModelKey(Map<String, dynamic> map) {
+    final value = map['modelKey'] ?? map['model_id'] ?? map['modelId'];
+    return value is String ? value : null;
+  }
+
+  bool? _readShardRequired(Map<String, dynamic> map) {
+    final value = map['shardRequired'] ?? map['shard_required'];
+    return value is bool ? value : null;
   }
 }

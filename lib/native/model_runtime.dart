@@ -26,11 +26,13 @@ class ModelRuntime {
   static Future<void> setKeyShard(
           {required String modelId,
           required String keyShardB64,
-          int? expiresAtMs}) =>
+          int? expiresAtMs,
+          String? userName}) =>
       _ch.invokeMethod('setKeyShard', {
         'modelId': modelId,
         'keyShardB64': keyShardB64,
         if (expiresAtMs != null) 'expiresAtMs': expiresAtMs,
+        if (userName != null) 'userName': userName,
       });
 
   static Future<void> clearKeyShard(String modelId) =>

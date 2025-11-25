@@ -111,6 +111,7 @@ class AIHFerModel: MLBase {
 
             let currentUserName = UserCodeUtils.sanitize(userName: userName)
             let manifest: Manifest = try loadManifestJSON(fromBundle: "aih_fer20250115.manifest")
+            print("Manifest aih_fer20250115: id=\(manifest.model_id ?? "nil") name=\(manifest.model_name ?? "nil") shard_required=\(manifest.shard_required ?? false)")
 
             let cekData = try obtainCEK_UserCodeGateSync(
                 manifest: manifest,

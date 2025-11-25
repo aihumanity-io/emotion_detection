@@ -141,6 +141,7 @@ final cek = await CekSecretClient.fetchCekSecret(
   modelKey: 'aih_fer2025',
   aad: 'com.creataai.emotionsdk/ios',
   overrideBaseUrl: 'https://staging.creata.ai',
+  cacheShardOnIOS: true, // optionally cache a shard lease when present
 );
 ```
 
@@ -171,6 +172,7 @@ between accounts. Both methods operate on the same MethodChannel as
 Stores the server-provided shard lease in memory for the current process so
 wrapped CEKs can only be unwrapped with a fresh shard. Shards are not persisted
 and expire based on the `expiresAt` timestamp you pass.
+Currently implemented on iOS; Android parity is in progress.
 
 ```dart
 await ModelRuntime.setKeyShard(
@@ -381,3 +383,7 @@ Map platform/native codes to these in the method channel handlers, then surface 
 * [ ] Ensure models are present for all supported platforms or feature-gated per platform.
 * [ ] Run example app on at least one device per platform.
 * [ ] Tag and publish.
+When `cacheShardOnIOS` is true and the payload contains shard fields (e.g.,
+`kekShardB64` or `cekShardB64`), the client will set the shard via
+`ModelRuntime.setKeyShard` using the provided `modelKey` and any expiry hints
+(`expiresAt` / `cekSecretExpiresAt`).

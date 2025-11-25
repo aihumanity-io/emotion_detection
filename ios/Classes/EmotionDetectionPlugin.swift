@@ -33,6 +33,7 @@ private enum UserCodeBridge {
         }
         guard decoded.count == 32 else { throw UserCodeBridgeError.invalidLength }
         try User32Store.save(decoded, account: account, requireBiometrics: requireBiometrics)
+        print("UserCode: saved for account=\(account) bytes=\(decoded.count) biometrics=\(requireBiometrics)")
     }
 
     static func clearUserCode(userName: String) throws {
@@ -51,9 +52,12 @@ enum UserCodeUtils {
     static func loadUser32(userName: String) throws -> Data {
         let acct = sanitize(userName: userName)
         if let cached = try? User32Store.load(account: acct) {
+            print("User32: loadUser32 hit keychain for \(acct) bytes=\(cached.count)")
             return cached
         }
-        return try User32SideLoad.loadUser32Data(bundle: .main)
+        let side = try User32SideLoad.loadUser32Data(bundle: .main)
+        print("User32: loadUser32 fell back to sideload bytes=\(side.count)")
+        return side
     }
 }
 
@@ -287,6 +291,14 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         let expiresAtMs = (args["expiresAtMs"] as? NSNumber)?.int64Value ?? (args["expiresAt"] as? NSNumber)?.int64Value
         do {
             try ShardCache.setShard(modelId: modelId, base64: shardB64, expiresAtMs: expiresAtMs)
+            if let userName = (args["userName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !userName.isEmpty {
+                let acct = UserCodeUtils.sanitize(userName: userName)
+                try? ShardCache.setShard(modelId: acct, base64: shardB64, expiresAtMs: expiresAtMs)
+                print("setKeyShard: stored for modelId=\(modelId) and user=\(acct)")
+            } else {
+                print("setKeyShard: stored for modelId=\(modelId) (no user alias)")
+            }
             result(nil)
         } catch {
             result(FlutterError(code: "shard_store_error", message: error.localizedDescription, details: nil))
