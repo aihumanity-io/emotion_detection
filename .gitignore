@@ -1,19 +1,16 @@
-# Core Dart & Flutter
+# Flutter & Dart
 .dart_tool/
 .packages
-pubspec.lock # kept for example, remove if needed
-
-# Flutter tooling state
 .flutter-plugins
 .flutter-plugins-dependencies
 .flutter-plugins-downloader
 .metadata
 
-# Build outputs
+# Builds
 build/
 example/build/
 
-# Android
+# Platforms: Android
 android/.gradle/
 android/.idea/
 android/local.properties
@@ -21,34 +18,34 @@ example/android/.gradle/
 example/android/.idea/
 example/android/local.properties
 
-# iOS / macOS
+# Platforms: iOS / macOS
+DerivedData/
 ios/Flutter/Generated.xcconfig
 ios/Flutter/ephemeral/
 ios/.symlinks/
 ios/Pods/
-macos/Flutter/GeneratedPluginRegistrant.swift
-macos/Flutter/ephemeral/
 example/ios/Flutter/Generated.xcconfig
 example/ios/Flutter/ephemeral/
 example/ios/.symlinks/
 example/ios/Pods/
+macos/Flutter/GeneratedPluginRegistrant.swift
+macos/Flutter/ephemeral/
 example/macos/Flutter/GeneratedPluginRegistrant.swift
 example/macos/Flutter/ephemeral/
 
-# Windows / Linux artifacts
+# Platforms: Windows / Linux
 windows/flutter/ephemeral/
 example/windows/flutter/ephemeral/
 linux/flutter/ephemeral/
 example/linux/flutter/ephemeral/
 
-# IntelliJ / VS Code
+# IDEs / editors
 .idea/
 *.iml
 .vscode/
 
 # Misc
+.DS_Store
 *.log
 *.lock.json
 Generated.xcconfig
-DerivedData/
-
