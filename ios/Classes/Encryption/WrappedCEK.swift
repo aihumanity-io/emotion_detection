@@ -4,6 +4,7 @@ import Foundation
 
 struct CekShardLease {
     let shard: Data
+    let shardB64: String?
     let expiresAt: Date?
 
     func isExpired(now: Date = Date()) -> Bool {
@@ -21,7 +22,8 @@ enum ShardCache {
     static func setShard(modelId rawModelId: String, base64: String, expiresAtMs: Int64?) throws {
         let modelId = rawModelId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !modelId.isEmpty else { throw ShardCacheError.invalidBase64 }
-        guard let data = Data(base64Encoded: base64) else { throw ShardCacheError.invalidBase64 }
+        let normalized = ShardCache.normalizeB64(base64)
+        guard let data = Data(base64Encoded: normalized) else { throw ShardCacheError.invalidBase64 }
         guard !data.isEmpty else { throw ShardCacheError.emptyShard }
 
         let expiry: Date?
@@ -31,7 +33,7 @@ enum ShardCache {
             expiry = nil
         }
 
-        let lease = CekShardLease(shard: data, expiresAt: expiry)
+        let lease = CekShardLease(shard: data, shardB64: base64, expiresAt: expiry)
         lock.lock(); defer { lock.unlock() }
         shards[modelId] = lease
         print("ShardCache: stored shard for id=\(modelId) bytes=\(data.count) exp=\(expiry?.timeIntervalSince1970 ?? -1)")
@@ -57,6 +59,14 @@ enum ShardCache {
             return lease
         }
         return nil
+    }
+}
+extension ShardCache {
+    static func normalizeB64(_ value: String) -> String {
+        var s = value.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        let missing = (4 - s.count % 4) % 4
+        if missing > 0 { s = s.padding(toLength: s.count + missing, withPad: "=", startingAt: 0) }
+        return s
     }
 }
 enum User32StoreErr: Error { case notFound, badStatus(OSStatus) }
@@ -157,11 +167,13 @@ enum User32Store {
 
 @available(iOS 14.0, *)
 func deriveKEK(user32: Data, shard: Data?, aad: String, kdfInfo: String) -> SymmetricKey {
-    var ikm = Data()
-    ikm.append(user32)
-    if let shard = shard { ikm.append(shard) }
-    return HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: ikm),
-        salt: Data(aad.utf8), info: Data(kdfInfo.utf8), outputByteCount: 32)
+    // Packaging binds shard via AAD/salt, not in IKM.
+    return HKDF<SHA256>.deriveKey(
+        inputKeyMaterial: SymmetricKey(data: user32),
+        salt: Data(aad.utf8),
+        info: Data(kdfInfo.utf8),
+        outputByteCount: 32
+    )
 }
 
 func unwrapCEK_fromManifest(wrappedCEK_B64: String, kek: SymmetricKey, aad: String) throws -> Data {
@@ -264,9 +276,10 @@ private func resolveShardLease(from manifest: Manifest, userName: String, now: D
 func obtainCEK_UserCodeGate(
     manifest: Manifest,
     userName: String,
+    modelId: String?,
     user32Supplier: () async throws -> Data
 ) async throws -> Data {
-    let acct = userName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let acct = UserCodeUtils.account(userName: userName, modelId: modelId)
 
     // 1) Load cached user32 or fetch & cache
     let user32: Data
@@ -303,13 +316,17 @@ func obtainCEK_UserCodeGate(
     let shardLease = try resolveShardLease(from: manifest, userName: userName)
     let useShard = manifest.shard_required == true
     let shardData = useShard ? shardLease?.shard : nil
-    if useShard {
-        print("KEK: using shard bytes=\(shardData?.count ?? 0)")
-    } else if shardLease != nil {
-        print("KEK: ignoring optional shard; manifest.shard_required=false")
+    let shardB64 = shardLease?.shardB64 ?? shardLease?.shard.base64EncodedString()
+    let aadAuth: String
+    if useShard, let s = shardB64, !s.isEmpty {
+        aadAuth = "\(aad)|shard:\(s)"
+        print("KEK: using shard bytes=\(shardData?.count ?? 0) aad=\(aadAuth)")
+    } else {
+        aadAuth = aad
+        if shardLease != nil { print("KEK: ignoring optional shard; manifest.shard_required=false") }
     }
-    let kek = deriveKEK(user32: user32, shard: shardData, aad: aad, kdfInfo: kdfInfo)
-    let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aad)
+    let kek = deriveKEK(user32: user32, shard: shardData, aad: aadAuth, kdfInfo: kdfInfo)
+    let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aadAuth)
     return cek
 }
 
@@ -317,11 +334,13 @@ func obtainCEK_UserCodeGate(
 func obtainCEK_UserCodeGate(
     manifest: Manifest,
     userName: String,
+    modelId: String?,
     user32Supplier: () throws -> Data
 ) async throws -> Data {
     try await obtainCEK_UserCodeGate(
         manifest: manifest,
         userName: userName,
+        modelId: modelId,
         user32Supplier: {
             let d = try user32Supplier()
             return d
@@ -333,9 +352,10 @@ func obtainCEK_UserCodeGate(
 func obtainCEK_UserCodeGateSync(
     manifest: Manifest,
     userName: String,
+    modelId: String?,
     user32Provider: () throws -> Data
 ) throws -> Data {
-    let acct = userName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let acct = UserCodeUtils.account(userName: userName, modelId: modelId)
 
     // load cached or import and cache
     let user32: Data
@@ -361,12 +381,16 @@ func obtainCEK_UserCodeGateSync(
     let shardLease = try resolveShardLease(from: manifest, userName: userName)
     let useShard = manifest.shard_required == true
     let shardData = useShard ? shardLease?.shard : nil
-    if useShard {
-        print("KEK: using shard bytes=\(shardData?.count ?? 0)")
-    } else if shardLease != nil {
-        print("KEK: ignoring optional shard; manifest.shard_required=false")
+    let shardB64 = shardLease?.shardB64 ?? shardLease?.shard.base64EncodedString()
+    let aadAuth: String
+    if useShard, let s = shardB64, !s.isEmpty {
+        aadAuth = "\(aad)|shard:\(s)"
+        print("KEK: using shard bytes=\(shardData?.count ?? 0) aad=\(aadAuth)")
+    } else {
+        aadAuth = aad
+        if shardLease != nil { print("KEK: ignoring optional shard; manifest.shard_required=false") }
     }
-    let kek = deriveKEK(user32: user32, shard: shardData, aad: aad, kdfInfo: kdfInfo)
-    let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aad)
+    let kek = deriveKEK(user32: user32, shard: shardData, aad: aadAuth, kdfInfo: kdfInfo)
+    let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: wrapped, kek: kek, aad: aadAuth)
     return cek
 }

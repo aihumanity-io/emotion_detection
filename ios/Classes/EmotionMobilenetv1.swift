@@ -58,11 +58,13 @@ class EmotionMobilenet: MLBase {
             let currentUserName = UserCodeUtils.sanitize(userName: userName)
             let manifest: Manifest = try loadManifestJSON(fromBundle: "mobilenetv1_fer2024-11-06-08-48-50.manifest.manifest")
             print("Manifest mobilenet: id=\(manifest.model_id ?? "nil") name=\(manifest.model_name ?? "nil") shard_required=\(manifest.shard_required ?? false)")
+            let modelId = manifest.model_id ?? manifest.model_name
 
             let cekData = try obtainCEK_UserCodeGateSync(
                 manifest: manifest,
                 userName: currentUserName,
-                user32Provider: { try UserCodeUtils.loadUser32(userName: currentUserName) }
+                modelId: modelId,
+                user32Provider: { try UserCodeUtils.loadUser32(userName: currentUserName, modelId: modelId) }
             )
 
             let model = try EncryptedModelLoader.loadFromBundle(

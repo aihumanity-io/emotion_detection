@@ -44,6 +44,13 @@ class ModelSecret {
   final bool? shardRequired;
 }
 
+/// Payload plus the modelKey it was requested with.
+class CekSecretResult {
+  CekSecretResult({required this.modelKey, required this.payload});
+  final String modelKey;
+  final Map<String, dynamic> payload;
+}
+
 /// Simple wrapper used by the example app to demonstrate
 /// how to call [CekSecretClient.fetchCekSecret].
 class ExampleSdkSecretModule {
@@ -120,12 +127,6 @@ class ExampleSdkSecretModule {
 
   List<String> get modelKeys => _modelKeys;
 
-  /// Payload plus the modelKey it was requested with.
-  class CekSecretResult {
-    CekSecretResult({required this.modelKey, required this.payload});
-    final String modelKey;
-    final Map<String, dynamic> payload;
-  }
 
   String? extractUserCode(Map<String, dynamic> payload) {
     for (final key in const [
@@ -222,6 +223,15 @@ class ExampleSdkSecretModule {
       }
     }
     return null;
+  }
+
+  String _normalizeBase64(String value) {
+    var normalized = value.replaceAll('-', '+').replaceAll('_', '/');
+    final missing = (4 - normalized.length % 4) % 4;
+    if (missing > 0) {
+      normalized = normalized.padRight(normalized.length + missing, '=');
+    }
+    return normalized;
   }
 
   int? _extractExpiresAt(Map<String, dynamic> map) {

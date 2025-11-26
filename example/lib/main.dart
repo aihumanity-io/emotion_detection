@@ -32,6 +32,25 @@ class _MyAppState extends State<MyApp> {
   String _cekSecretStatus = 'Not requested yet.';
   bool _fetchingCekSecret = false;
   bool _userCodeReady = false;
+  static const bool _kOneTimeClearCaches = false;
+  bool _didClearCaches = false;
+
+  static const Map<String, String> _modelAccountIds = {
+    'aih_fer20250115': 'aih_fer20250115_v2025-01-15-shard',
+    'mobilenetv1_fer2024-11-06-08-48-50':
+        'mobilenetv1_fer2024-11-06-08-48-50_v2025-01-15-shard',
+  };
+
+  String _accountModelId(String modelKey) =>
+      _modelAccountIds[modelKey] ?? modelKey;
+
+  Iterable<String> _allModelIds(String modelKey) sync* {
+    yield modelKey;
+    final mapped = _modelAccountIds[modelKey];
+    if (mapped != null && mapped.isNotEmpty && mapped != modelKey) {
+      yield mapped;
+    }
+  }
 
   @override
   void initState() {
@@ -65,7 +84,36 @@ class _MyAppState extends State<MyApp> {
     ModelRuntime(_methodChannelName);
   }
 
+  Future<void> _maybeClearCaches() async {
+    if (!_kOneTimeClearCaches || _didClearCaches) return;
+    _didClearCaches = true;
+    _ensureModelRuntimeChannel();
+    for (final modelKey in _sdkSecretModule.modelKeys) {
+      final accountId = _accountModelId(modelKey);
+      try {
+        await UserCodeChannel.clearUserCode(
+          _sdkSecretModule.userName,
+          modelId: accountId,
+        );
+      } catch (error) {
+        debugPrint('Clear user code failed for $modelKey: $error');
+      }
+      try {
+        await ModelRuntime.clearKeyShard(modelKey);
+      } catch (error) {
+        debugPrint('Clear shard failed for $modelKey: $error');
+      }
+    }
+    try {
+      // Also clear legacy account without modelId to avoid collisions.
+      await UserCodeChannel.clearUserCode(_sdkSecretModule.userName);
+    } catch (error) {
+      debugPrint('Clear legacy user code failed: $error');
+    }
+  }
+
   Future<void> _fetchCekSecret() async {
+    await _maybeClearCaches();
     if (!_sdkSecretModule.hasRequiredConfig) {
       setState(() {
         _cekSecretStatus =
@@ -88,64 +136,70 @@ class _MyAppState extends State<MyApp> {
         }
       }
 
-      String? userCodeB64;
-      for (final res in results) {
-        userCodeB64 ??= _sdkSecretModule.extractUserCode(res.payload);
-        if (userCodeB64 != null) break;
-      }
+      int storedUserCodes = 0;
+      int shardCount = 0;
 
-      if (userCodeB64 != null) {
-        if (!_sdkSecretModule.hasUserName) {
-          status = 'Missing EXAMPLE_USER_NAME to save user code.';
-        } else {
-          try {
-            _ensureModelRuntimeChannel();
-            await UserCodeChannel.saveUserCode(
-              userName: _sdkSecretModule.userName,
-              userCodeB64: userCodeB64,
-            );
-            status = 'User code stored';
-            _userCodeReady = true;
-            if (defaultTargetPlatform == TargetPlatform.iOS) {
+      if (!_sdkSecretModule.hasUserName) {
+        status = 'Missing EXAMPLE_USER_NAME to save user code.';
+      } else {
+        try {
+          _ensureModelRuntimeChannel();
+
+          for (final res in results) {
+            final modelKey = res.modelKey;
+            final accountId = _accountModelId(modelKey);
+            final userCodeB64 = _sdkSecretModule.extractUserCode(res.payload);
+            if (userCodeB64 != null) {
               try {
-                int shardCount = 0;
-                for (final res in results) {
-                  final modelKey = res.modelKey;
-                  final shardB64 = _sdkSecretModule.extractShard(
-                    res.payload,
-                    modelKey: modelKey,
-                  );
-                  final expiresAtMs = _sdkSecretModule.extractExpiresAtMs(
-                    res.payload,
-                    modelKey: modelKey,
-                  );
-                  if (shardB64 != null) {
+                await UserCodeChannel.saveUserCode(
+                  userName: _sdkSecretModule.userName,
+                  userCodeB64: userCodeB64,
+                  modelId: accountId,
+                );
+                storedUserCodes++;
+              } catch (error) {
+                debugPrint('saveUserCode failed for $modelKey: $error');
+              }
+            }
+            if (defaultTargetPlatform == TargetPlatform.iOS) {
+              final shardB64 = _sdkSecretModule.extractShard(
+                res.payload,
+                modelKey: modelKey,
+              );
+              final expiresAtMs = _sdkSecretModule.extractExpiresAtMs(
+                res.payload,
+                modelKey: modelKey,
+              );
+              if (shardB64 != null) {
+                try {
+                  for (final id in _allModelIds(modelKey)) {
                     await ModelRuntime.setKeyShard(
-                      modelId: modelKey,
+                      modelId: id,
                       keyShardB64: shardB64,
                       expiresAtMs: expiresAtMs,
                       userName: _sdkSecretModule.userName,
                     );
-                    shardCount++;
                   }
+                  shardCount++;
+                } catch (error) {
+                  debugPrint('setKeyShard failed for $modelKey: $error');
                 }
-                status =
-                    shardCount > 0
-                        ? 'User code + shards stored ($shardCount/${results.length})'
-                        : 'User code stored (no shard in responses).';
-              } catch (error) {
-                status = 'User code stored; shard failed: $error';
-                _userCodeReady = false;
               }
-            } else {
-              status = 'User code stored (shard skipped on this platform).';
             }
-          } catch (error) {
-            status = 'Failed to store user code: $error';
           }
+
+          _userCodeReady = storedUserCodes > 0;
+          if (storedUserCodes == 0) {
+            status = 'Responses missing userCodeB64 field.';
+          } else {
+            status = shardCount > 0
+                ? 'User codes stored ($storedUserCodes); shards stored ($shardCount/${results.length})'
+                : 'User codes stored ($storedUserCodes); no shards in responses.';
+          }
+        } catch (error) {
+          status = 'Failed to store user code/shard: $error';
+          _userCodeReady = false;
         }
-      } else {
-        status = 'Responses missing userCodeB64 field.';
       }
     }
 

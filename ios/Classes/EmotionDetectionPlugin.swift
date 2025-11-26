@@ -24,8 +24,8 @@ private enum UserCodeBridgeError: LocalizedError {
 
 @available(iOS 15.0, *)
 private enum UserCodeBridge {
-    static func saveUserCode(b64: String, userName: String, requireBiometrics: Bool) throws {
-        let account = UserCodeUtils.sanitize(userName: userName)
+    static func saveUserCode(b64: String, userName: String, modelId: String?, requireBiometrics: Bool) throws {
+        let account = UserCodeUtils.account(userName: userName, modelId: modelId)
         guard !account.isEmpty else { throw UserCodeBridgeError.emptyAccount }
         let trimmed = b64.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let decoded = Data(base64Encoded: trimmed) else {
@@ -36,8 +36,8 @@ private enum UserCodeBridge {
         print("UserCode: saved for account=\(account) bytes=\(decoded.count) biometrics=\(requireBiometrics)")
     }
 
-    static func clearUserCode(userName: String) throws {
-        let account = UserCodeUtils.sanitize(userName: userName)
+    static func clearUserCode(userName: String, modelId: String?) throws {
+        let account = UserCodeUtils.account(userName: userName, modelId: modelId)
         guard !account.isEmpty else { throw UserCodeBridgeError.emptyAccount }
         try User32Store.delete(account: account)
     }
@@ -49,8 +49,16 @@ enum UserCodeUtils {
         userName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    static func loadUser32(userName: String) throws -> Data {
-        let acct = sanitize(userName: userName)
+    static func account(userName: String, modelId: String?) -> String {
+        let base = sanitize(userName: userName)
+        if let mid = modelId?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !mid.isEmpty {
+            return "\(base)|\(mid)"
+        }
+        return base
+    }
+
+    static func loadUser32(userName: String, modelId: String?) throws -> Data {
+        let acct = account(userName: userName, modelId: modelId)
         if let cached = try? User32Store.load(account: acct) {
             print("User32: loadUser32 hit keychain for \(acct) bytes=\(cached.count)")
             return cached
@@ -256,8 +264,9 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
             return
         }
         let requireBiometrics = args["requireBiometrics"] as? Bool ?? false
+        let modelId = args["modelId"] as? String
         do {
-            try UserCodeBridge.saveUserCode(b64: userCodeB64, userName: userName, requireBiometrics: requireBiometrics)
+            try UserCodeBridge.saveUserCode(b64: userCodeB64, userName: userName, modelId: modelId, requireBiometrics: requireBiometrics)
             EmotionDetectionPlugin.currentUserName = UserCodeUtils.sanitize(userName: userName)
             EmotionDetectionPlugin.resetModels()
             result(nil)
@@ -272,8 +281,9 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
             result(FlutterError(code: "invalid_args", message: "userName is required", details: nil))
             return
         }
+        let modelId = args["modelId"] as? String
         do {
-            try UserCodeBridge.clearUserCode(userName: userName)
+            try UserCodeBridge.clearUserCode(userName: userName, modelId: modelId)
             EmotionDetectionPlugin.resetModels()
             result(nil)
         } catch {
