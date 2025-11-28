@@ -81,11 +81,6 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
     val assets = _appContext.getAssets()
 
     // one way to decrypt
-    val manifestJson   = assets.open("$modelId.manifest.json").bufferedReader().readText()
-    val licenseJson = assets.open("licenses/$modelId.license.json").bufferedReader().readText()
-    //val modelFile = licMgr.openModel(licenseJson, manifestJson, verify = true)
-    //_emotionModel = loadPlainModelFile("models/mobilenetv1_2024-11-03-19-24-14.tflite");
-
     // the current way
     Log.i("EmotionDetectionPlugin", "loading & decrypting model: " + modelId)
     _emotionModel = loadModelFile(_appContext, modelId, licMgr)
@@ -130,6 +125,27 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
       }
     } else if(call.method == "clearUserCode") {
       licMgr.clearSecrets()
+      result.success(null)
+    } else if(call.method == "setKeyShard") {
+      val shardB64 = call.argument<String>("keyShardB64")
+      if (shardB64.isNullOrBlank()) {
+        result.error("invalid_args", "keyShardB64 is required", null)
+        return
+      }
+      try {
+        val decoded = Base64.decode(shardB64.trim(), Base64.NO_WRAP)
+        if (decoded.isEmpty()) {
+          result.error("invalid_length", "shard must be non-empty", null)
+          return
+        }
+        licMgr.saveShard(decoded)
+        result.success(null)
+      } catch (e: IllegalArgumentException) {
+        result.error("invalid_base64", "Failed to decode keyShardB64", e.localizedMessage)
+      }
+    } else if(call.method == "clearKeyShard") {
+      store.remove(keys.shard)
+      store.remove(keys.deviceWrappedCek)
       result.success(null)
     } else {
       result.notImplemented()

@@ -181,10 +181,10 @@ between accounts. Both methods operate on the same MethodChannel as
 
 ### `ModelRuntime.setKeyShard`
 
-Stores the server-provided shard lease in memory for the current process so
-wrapped CEKs can only be unwrapped with a fresh shard. Shards are not persisted
-and expire based on the `expiresAt` timestamp you pass.
-Currently implemented on iOS; Android parity is in progress.
+Stores the server-provided shard lease so wrapped CEKs can only be unwrapped
+with a fresh shard. On iOS shards are in-memory; on Android they are stored via
+the secure store and invalidate the cached device-wrapped CEK. Expiry handling
+is driven by the timestamp you pass and/or the manifest requirements.
 
 ```dart
 await ModelRuntime.setKeyShard(

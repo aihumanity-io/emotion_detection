@@ -31,8 +31,6 @@ private fun loadModelFileEncrypted(appContext: Context, modelId: String, licMgr:
     // 1) Read manifest from assets (shared for everyone)
     val manifestJson = assets.open("$modelId.manifest.json")
         .bufferedReader().use { it.readText() }
-    val licenseJson = assets.open("licenses/$modelId.license.json")
-        .bufferedReader().use { it.readText() }
     // 2) Read per-user license from app-private storage
     //val licFile = File(appContext.filesDir, "licenses/$modelId.license.json")
 
@@ -41,7 +39,6 @@ private fun loadModelFileEncrypted(appContext: Context, modelId: String, licMgr:
 
     // 3) Decrypt model.enc (from assets) to a temp file (LicenseManager already streams/decrypts)
     val decryptedModelFile: File = licMgr.openModel(
-        licenseJson = licenseJson,
         manifestJson = manifestJson,
         verify = true
     )
@@ -106,15 +103,19 @@ class LicenseManager(
     fun saveUserCode(userCode32: ByteArray) {
         require(userCode32.size == 32) { "userCode32 must be 32 bytes" }
         store.put(keys.userCode, userCode32)
+        store.remove(keys.deviceWrappedCek) // force re-unwrap on next open
     }
-    fun saveShard(shard: ByteArray) { store.put(keys.shard, shard) }
+    fun saveShard(shard: ByteArray) {
+        store.put(keys.shard, shard)
+        store.remove(keys.deviceWrappedCek)
+    }
     fun clearSecrets() {
         store.remove(keys.userCode); store.remove(keys.shard); store.remove(keys.deviceWrappedCek)
     }
 
-    fun openModel(licenseJson: String, manifestJson: String, verify: Boolean = true): File {
-        val lic = Parsers.licenseFrom(licenseJson)
+    fun openModel(manifestJson: String, verify: Boolean = true): File {
         val man = Parsers.manifestFrom(manifestJson)
+        val aadBytes = if (man.aad.isNotEmpty()) man.aad.toByteArray() else null
 
         // 1) try cached CEK (device-KEK rewrap)
         val cached = store.get(keys.deviceWrappedCek)
@@ -128,13 +129,14 @@ class LicenseManager(
         }) ?: run {
             // 2) derive KEK from userCode (+shard) and unwrap CEK from license
             val userCode = store.get(keys.userCode) ?: error("Missing userCode32")
-            val ikm = if (lic.shardUsed) {
-                val shard = store.get(keys.shard) ?: error("License expects shard, but none stored")
-                userCode + shard
-            } else userCode
-            val info = "model:${lic.modelId}".toByteArray()
-            val kekBytes = HKDF.sha256(ikm, lic.salt, info, 32)
-            val cekBytes = Gcm.decryptCekWrap(kekBytes, lic.wrapIv, lic.wrappedCek)
+            val shard = store.get(keys.shard)
+            if (man.wrap.shardRequired && shard == null) {
+                error("Manifest expects shard, but none stored")
+            }
+            val ikm = if (shard != null) userCode + shard else userCode
+            val info = man.aad.toByteArray()
+            val kekBytes = HKDF.sha256(ikm, man.wrap.salt, info, 32)
+            val cekBytes = Gcm.decryptCekWrap(kekBytes, man.wrap.iv, man.wrappedCek, aadBytes)
 
             // 3) rewrap CEK with device KEK and cache as IV||ct+tag
             val devKek = deviceKek.derive(man.modelId)
@@ -151,7 +153,7 @@ class LicenseManager(
         val tmp = File.createTempFile(man.modelId, ".bin", appContext.cacheDir)
         appContext.assets.open("${man.modelId}.enc").use { enc ->
             tmp.outputStream().use { out ->
-                Gcm.decryptModelTo(cek, man.gcmIv, enc, out, aad = null)
+                Gcm.decryptModelTo(cek, man.gcmIv, enc, out, aad = aadBytes)
             }
         }
 
