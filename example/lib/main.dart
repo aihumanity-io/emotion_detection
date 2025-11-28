@@ -126,7 +126,8 @@ class _MyAppState extends State<MyApp> {
       _fetchingCekSecret = true;
       _cekSecretStatus = 'Requesting /sdk/cek-secret...';
     });
-    final results = await _sdkSecretModule.fetchAllCekSecrets();
+    final aad = _sdkSecretModule.aadForPlatform(defaultTargetPlatform);
+    final results = await _sdkSecretModule.fetchAllCekSecrets(aadOverride: aad);
     String status = 'fetchCekSecret returned null (see logs).';
     if (results.isNotEmpty) {
       status = 'Received ${results.length} response(s)';
@@ -147,6 +148,11 @@ class _MyAppState extends State<MyApp> {
 
           for (final res in results) {
             final modelKey = res.modelKey;
+            if (defaultTargetPlatform == TargetPlatform.android &&
+                modelKey == 'aih_fer20250115') {
+              // skip models not supported on Android yet
+              continue;
+            }
             final accountId = _accountModelId(modelKey);
             final userCodeB64 = _sdkSecretModule.extractUserCode(res.payload);
             if (userCodeB64 != null) {
@@ -176,7 +182,7 @@ class _MyAppState extends State<MyApp> {
                   for (final id in _allModelIds(modelKey)) {
                     await ModelRuntime.setKeyShard(
                       modelId: id,
-                      keyShardB64: shardB64,
+                      keyShardB64: _sdkSecretModule.normalizeShard(shardB64),
                       expiresAtMs: expiresAtMs,
                     );
                   }

@@ -20,6 +20,10 @@ const String _exampleAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD',
   defaultValue: 'com.creataai.emotionsdk/ios',
 );
+const String _exampleAndroidAad = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD_ANDROID',
+  defaultValue: 'com.creataai.emotionsdk/android',
+);
 const String _exampleOverrideBase = String.fromEnvironment(
   'EXAMPLE_SERVER_BASE_URL',
   defaultValue: 'https://tartalabapi.onrender.com',
@@ -60,11 +64,13 @@ class ExampleSdkSecretModule {
     String? modelKey,
     List<String>? modelKeys,
     String? aad,
+    String? androidAad,
     String? overrideBaseUrl,
     String? userName,
   })  : _apiKeyId = apiKeyId ?? _exampleSdkKeyId,
         _apiKeySecret = apiKeySecret ?? _exampleSdkKeySecret,
         _aad = aad ?? _exampleAad,
+        _androidAad = androidAad ?? _exampleAndroidAad,
         _overrideBaseUrl = overrideBaseUrl ?? _exampleOverrideBase,
         _userName = userName ?? _exampleUserName,
         _modelKeys = (modelKeys != null && modelKeys.isNotEmpty)
@@ -80,15 +86,16 @@ class ExampleSdkSecretModule {
   final String _modelKey;
   final List<String> _modelKeys;
   final String _aad;
+  final String _androidAad;
   final String _overrideBaseUrl;
   final String _userName;
 
-  Future<Map<String, dynamic>?> fetchCekSecret() {
+  Future<Map<String, dynamic>?> fetchCekSecret({String? aadOverride}) {
     return CekSecretClient.fetchCekSecret(
       apiKeyId: _apiKeyId,
       apiKeySecret: _apiKeySecret,
       modelKey: _modelKey,
-      aad: _aad.isEmpty ? null : _aad,
+      aad: (aadOverride ?? _aad).isEmpty ? null : (aadOverride ?? _aad),
       overrideBaseUrl: _overrideBaseUrl.isEmpty ? null : _overrideBaseUrl,
     );
   }
@@ -96,14 +103,15 @@ class ExampleSdkSecretModule {
   /// Fetch secrets for all configured model keys, returning the non-null
   /// payloads in order. Each call only includes the shard for the requested
   /// model key.
-  Future<List<CekSecretResult>> fetchAllCekSecrets() async {
+  Future<List<CekSecretResult>> fetchAllCekSecrets(
+      {String? aadOverride}) async {
     final results = <CekSecretResult>[];
     for (final key in _modelKeys) {
       final res = await CekSecretClient.fetchCekSecret(
         apiKeyId: _apiKeyId,
         apiKeySecret: _apiKeySecret,
         modelKey: key,
-        aad: _aad.isEmpty ? null : _aad,
+        aad: (aadOverride ?? _aad).isEmpty ? null : (aadOverride ?? _aad),
         overrideBaseUrl: _overrideBaseUrl.isEmpty ? null : _overrideBaseUrl,
       );
       if (res != null) {
@@ -127,6 +135,12 @@ class ExampleSdkSecretModule {
 
   List<String> get modelKeys => _modelKeys;
 
+  String aadForPlatform(TargetPlatform platform) {
+    if (platform == TargetPlatform.android) {
+      return _androidAad;
+    }
+    return _aad;
+  }
 
   String? extractUserCode(Map<String, dynamic> payload) {
     for (final key in const [
@@ -145,7 +159,8 @@ class ExampleSdkSecretModule {
   }
 
   String? extractModelKey(Map<String, dynamic> payload) {
-    final value = payload['modelKey'] ?? payload['model_id'] ?? payload['modelId'];
+    final value =
+        payload['modelKey'] ?? payload['model_id'] ?? payload['modelId'];
     return value is String && value.isNotEmpty ? value : null;
   }
 
@@ -224,6 +239,8 @@ class ExampleSdkSecretModule {
     }
     return null;
   }
+
+  String normalizeShard(String shardB64) => _normalizeBase64(shardB64);
 
   String _normalizeBase64(String value) {
     var normalized = value.replaceAll('-', '+').replaceAll('_', '/');

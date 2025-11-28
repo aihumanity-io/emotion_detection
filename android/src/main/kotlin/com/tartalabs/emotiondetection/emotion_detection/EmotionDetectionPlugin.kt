@@ -125,7 +125,17 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
         return
       }
       try {
-        val decoded = Base64.decode(shardB64.trim(), Base64.NO_WRAP)
+        var decoded: ByteArray? = null
+        val trimmed = shardB64.trim()
+        try {
+          decoded = Base64.decode(trimmed, Base64.NO_WRAP)
+        } catch (_: IllegalArgumentException) {
+          decoded = null
+        }
+        if (decoded == null) {
+          // Try URL-safe variant
+          decoded = Base64.decode(trimmed, Base64.URL_SAFE or Base64.NO_WRAP)
+        }
         if (decoded.isEmpty()) {
           result.error("invalid_length", "shard must be non-empty", null)
           return
