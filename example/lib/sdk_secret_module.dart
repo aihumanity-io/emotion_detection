@@ -1,4 +1,5 @@
 import 'package:emotion_detection/emotion_detection.dart';
+import 'package:flutter/foundation.dart';
 
 const String _exampleSdkKeyId = String.fromEnvironment(
   'SDK_KEY_ID',
