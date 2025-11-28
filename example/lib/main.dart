@@ -161,7 +161,8 @@ class _MyAppState extends State<MyApp> {
                 debugPrint('saveUserCode failed for $modelKey: $error');
               }
             }
-            if (defaultTargetPlatform == TargetPlatform.iOS) {
+            if (defaultTargetPlatform == TargetPlatform.iOS ||
+                defaultTargetPlatform == TargetPlatform.android) {
               final shardB64 = _sdkSecretModule.extractShard(
                 res.payload,
                 modelKey: modelKey,
@@ -177,7 +178,6 @@ class _MyAppState extends State<MyApp> {
                       modelId: id,
                       keyShardB64: shardB64,
                       expiresAtMs: expiresAtMs,
-                      userName: _sdkSecretModule.userName,
                     );
                   }
                   shardCount++;
