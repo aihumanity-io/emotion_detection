@@ -1,11 +1,8 @@
 package com.tartalabs.emotiondetection.emotion_detection
 
 import android.content.Context
-import android.content.res.AssetFileDescriptor
-import android.content.res.AssetManager
 import android.util.Log
 import androidx.annotation.NonNull
-import com.tartalabs.crypto.DeviceKek
 import com.tartalabs.crypto.KeystorePrefsStore
 import com.tartalabs.crypto.LicenseKeys
 
@@ -19,9 +16,7 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import com.tartalabs.crypto.LicenseManager
 import android.util.Base64
-import com.tartalabs.crypto.SecretStore
 import com.tartalabs.crypto.ensureUserCode
-import com.tartalabs.crypto.loadModelFile
 
 val modelId = "mobilenetv1_2024-11-03-19-24-14"
 /** EmotionDetectionPlugin */
@@ -32,15 +27,17 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
   /// when the Flutter Engine is detached from the Activity
   private lateinit var channel : MethodChannel
   lateinit var _emotionPredictor: EmotionMoblenet
-  lateinit var _emotionModel: MappedByteBuffer
   lateinit private var _appContext: Context
-  var modelFileLength: Long = 0
   var TAG: String = "EmotionDetectionPlugin"
   lateinit var store: KeystorePrefsStore
 
   lateinit var keys: LicenseKeys
 
   lateinit var licMgr: LicenseManager
+
+  data class ModelSpec(val modelId: String, val resourceBase: String, val encExt: String = "onnx.enc")
+  private val models: MutableMap<String, MappedByteBuffer> = mutableMapOf()
+  private val specs: MutableMap<String, ModelSpec> = mutableMapOf()
 
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -75,18 +72,7 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
 
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "face_emotion_detection")
     channel.setMethodCallHandler(this)
-
-    //
-    // later:
-    val assets = _appContext.getAssets()
-
-    // one way to decrypt
-    // the current way
-    Log.i("EmotionDetectionPlugin", "loading & decrypting model: " + modelId)
-    _emotionModel = loadModelFile(_appContext, modelId, licMgr)
-    modelFileLength = _emotionModel.capacity().toLong()
-    Log.i("EmotionDetectionPlugin", "model: " + modelId + " loaded size: " + _emotionModel.capacity())
-    _emotionPredictor = EmotionMoblenet(_appContext, _emotionModel)
+    Log.i("EmotionDetectionPlugin", "plugin attached; models will load on demand")
   }
 
   override fun onMethodCall(call: MethodCall, result: Result) {
@@ -147,6 +133,46 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
       store.remove(keys.shard)
       store.remove(keys.deviceWrappedCek)
       result.success(null)
+    } else if (call.method == "registerModel") {
+      val modelId = call.argument<String>("modelId") ?: run {
+        result.error("invalid_args", "modelId is required", null); return
+      }
+      val resourceBase = call.argument<String>("resourceBase") ?: modelId
+      val encExt = call.argument<String>("encExt") ?: "onnx.enc"
+      specs[modelId] = ModelSpec(modelId = modelId, resourceBase = resourceBase, encExt = encExt)
+      result.success(null)
+    } else if (call.method == "warmUp") {
+      val modelId = call.argument<String>("modelId") ?: run {
+        result.error("invalid_args", "modelId is required", null); return
+      }
+      try {
+        loadModelIfNeeded(modelId)
+        result.success(true)
+      } catch (e: Exception) {
+        result.error("model_load_error", e.message, e.localizedMessage)
+      }
+    } else if (call.method == "predict") {
+      val modelId = call.argument<String>("modelId") ?: run {
+        result.error("invalid_args", "modelId is required", null); return
+      }
+      val inputs = call.argument<Map<String, Any>>("inputs") ?: emptyMap()
+      try {
+        val predictor = ensureModel(modelId)
+        val emotionResult = predictor.handlePrediction(call, result)
+        if (emotionResult.isNotEmpty()) {
+          result.success(emotionResult)
+        } else {
+          result.error("UNAVAILABLE", "emotion not available.", null)
+        }
+      } catch (e: Exception) {
+        result.error("model_inference_error", e.message, e.localizedMessage)
+      }
+    } else if (call.method == "unload") {
+      val modelId = call.argument<String>("modelId") ?: run {
+        result.error("invalid_args", "modelId is required", null); return
+      }
+      models.remove(modelId)
+      result.success(null)
     } else {
       result.notImplemented()
     }
@@ -198,5 +224,24 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
     Log.e(TAG, "file length: $declaredLength offset: $startoffset")
     modelFileLength = declaredLength
     return fileChannel.map(FileChannel.MapMode.READ_ONLY, startoffset, declaredLength)
+  }
+
+  private fun loadModelIfNeeded(modelId: String) {
+    if (models.containsKey(modelId)) return
+    val spec = specs[modelId] ?: ModelSpec(modelId = modelId, resourceBase = modelId, encExt = "onnx.enc")
+    val modelBase = spec.resourceBase
+    val manifestName = if (modelBase.endsWith(".manifest")) "$modelBase.json" else "$modelBase.manifest.json"
+    val manifestJson = _appContext.assets.open(manifestName).bufferedReader().use { it.readText() }
+    val dec = licMgr.openModel(manifestJson = manifestJson, verify = true)
+    FileInputStream(dec).channel.use { ch ->
+      val mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size())
+      models[modelId] = mapped
+      _emotionPredictor = EmotionMoblenet(_appContext, mapped)
+    }
+  }
+
+  private fun ensureModel(modelId: String): EmotionMoblenet {
+    loadModelIfNeeded(modelId)
+    return _emotionPredictor
   }
 }
