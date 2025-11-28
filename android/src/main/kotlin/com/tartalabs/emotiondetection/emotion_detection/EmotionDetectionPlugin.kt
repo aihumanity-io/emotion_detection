@@ -16,7 +16,6 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import com.tartalabs.crypto.LicenseManager
 import android.util.Base64
-import com.tartalabs.crypto.ensureUserCode
 
 val modelId = "mobilenetv1_2024-11-03-19-24-14"
 /** EmotionDetectionPlugin */
@@ -26,7 +25,7 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
   /// when the Flutter Engine is detached from the Activity
   private lateinit var channel : MethodChannel
-  lateinit var _emotionPredictor: EmotionMoblenet
+  private var _emotionPredictor: EmotionMoblenet? = null
   lateinit private var _appContext: Context
   var TAG: String = "EmotionDetectionPlugin"
   lateinit var store: KeystorePrefsStore
@@ -79,10 +78,16 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
     if (call.method == "getPlatformVersion") {
       result.success("Android ${android.os.Build.VERSION.RELEASE}")
     } else if(call.method == "faceEmotion") {
+      try {
+        ensureModel(modelId)
+      } catch (e: Exception) {
+        result.error("model_load_error", e.message, e.localizedMessage)
+        return
+      }
       //Log.e("EmotionDetectionPlugin", " model length: "+modelFileLength)
 
       //val emotionResult = _predictor.handlePrediction(call, result)
-      val emotionResult = _emotionPredictor.handlePrediction(call, result)
+      val emotionResult = _emotionPredictor?.handlePrediction(call, result) ?: emptyMap<String, Double>()
 
       //result.error("UNAVAILABLE", "Eye gaze not available.", null)
 
@@ -194,43 +199,11 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
     }
   }
 
-  // This can be used to load regular models
-  private fun loadPlainModelFile(filename: String): MappedByteBuffer {
-    /*AssetManager assetManager = registar.context().getAssets();
-
-    String key = registrar.lookupKeyForAsset("models/mobilenetv2636.tflite");
-
-    AssetFileDescriptor assetFileDescriptor = assetManager.openFd(key);
-
-     */
-
-    /*AssetManager assetManager = registar.context().getAssets();
-
-    String key = registrar.lookupKeyForAsset("models/mobilenetv2636.tflite");
-
-    AssetFileDescriptor assetFileDescriptor = assetManager.openFd(key);
-
-     */
-    val MODEL_ASSETS_PATH = filename //"models/mobilenetv2636.tflite"
-    val assetManager: AssetManager = _appContext.getAssets()
-    if (assetManager == null) {
-      Log.e(TAG, "Asset manager is null")
-    }
-    val assetFileDescriptor: AssetFileDescriptor = _appContext.getAssets().openFd(MODEL_ASSETS_PATH)
-    val fileInputStream = FileInputStream(assetFileDescriptor.getFileDescriptor())
-    val fileChannel: FileChannel = fileInputStream.getChannel()
-    val startoffset: Long = assetFileDescriptor.getStartOffset()
-    val declaredLength: Long = assetFileDescriptor.getDeclaredLength()
-    Log.e(TAG, "file length: $declaredLength offset: $startoffset")
-    modelFileLength = declaredLength
-    return fileChannel.map(FileChannel.MapMode.READ_ONLY, startoffset, declaredLength)
-  }
-
   private fun loadModelIfNeeded(modelId: String) {
     if (models.containsKey(modelId)) return
     val spec = specs[modelId] ?: ModelSpec(modelId = modelId, resourceBase = modelId, encExt = "onnx.enc")
     val modelBase = spec.resourceBase
-    val manifestName = if (modelBase.endsWith(".manifest")) "$modelBase.json" else "$modelBase.manifest.json"
+    val manifestName = "$modelBase.manifest.json"
     val manifestJson = _appContext.assets.open(manifestName).bufferedReader().use { it.readText() }
     val dec = licMgr.openModel(manifestJson = manifestJson, verify = true)
     FileInputStream(dec).channel.use { ch ->
@@ -242,6 +215,6 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
 
   private fun ensureModel(modelId: String): EmotionMoblenet {
     loadModelIfNeeded(modelId)
-    return _emotionPredictor
+    return requireNotNull(_emotionPredictor) { "Model $modelId not loaded" }
   }
 }
