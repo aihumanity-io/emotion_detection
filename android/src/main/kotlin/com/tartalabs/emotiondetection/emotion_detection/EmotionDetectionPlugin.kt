@@ -134,7 +134,15 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
         }
         if (decoded == null) {
           // Try URL-safe variant
-          decoded = Base64.decode(trimmed, Base64.URL_SAFE or Base64.NO_WRAP)
+          decoded = try {
+            Base64.decode(trimmed, Base64.URL_SAFE or Base64.NO_WRAP)
+          } catch (_: IllegalArgumentException) {
+            null
+          }
+        }
+        if (decoded == null) {
+          result.error("invalid_base64", "Failed to decode keyShardB64", null)
+          return
         }
         if (decoded.isEmpty()) {
           result.error("invalid_length", "shard must be non-empty", null)
