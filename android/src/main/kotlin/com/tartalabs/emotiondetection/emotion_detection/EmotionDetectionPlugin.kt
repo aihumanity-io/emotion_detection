@@ -81,6 +81,7 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
       try {
         ensureModel(modelId)
       } catch (e: Exception) {
+        Log.e(TAG, "model_load_error: ${e.message}", e)
         result.error("model_load_error", e.message, e.localizedMessage)
         return
       }
@@ -154,6 +155,7 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
         loadModelIfNeeded(modelId)
         result.success(true)
       } catch (e: Exception) {
+        Log.e(TAG, "warmUp failed: ${e.message}", e)
         result.error("model_load_error", e.message, e.localizedMessage)
       }
     } else if (call.method == "predict") {
@@ -170,6 +172,7 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
           result.error("UNAVAILABLE", "emotion not available.", null)
         }
       } catch (e: Exception) {
+        Log.e(TAG, "predict failed: ${e.message}", e)
         result.error("model_inference_error", e.message, e.localizedMessage)
       }
     } else if (call.method == "unload") {
@@ -208,6 +211,7 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
     val spec = specs[modelId] ?: ModelSpec(modelId = modelId, resourceBase = modelId, encExt = "onnx.enc")
     val modelBase = spec.resourceBase
     val manifestName = "$modelBase.manifest.json"
+    Log.i(TAG, "loading manifest: $manifestName for modelId=$modelId")
     val manifestJson = _appContext.assets.open(manifestName).bufferedReader().use { it.readText() }
     val dec = licMgr.openModel(manifestJson = manifestJson, verify = true)
     FileInputStream(dec).channel.use { ch ->

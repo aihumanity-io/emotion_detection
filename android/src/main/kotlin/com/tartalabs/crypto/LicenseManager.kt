@@ -116,6 +116,7 @@ class LicenseManager(
     fun openModel(manifestJson: String, verify: Boolean = true): File {
         val man = Parsers.manifestFrom(manifestJson)
         val aadBytes = if (man.aad.isNotEmpty()) man.aad.toByteArray() else null
+        Log.i("LicenseManager", "openModel modelId=${man.modelId} shardRequired=${man.wrap.shardRequired} aad='${man.aad}'")
 
         // 1) try cached CEK (device-KEK rewrap)
         val cached = store.get(keys.deviceWrappedCek)
@@ -125,7 +126,7 @@ class LicenseManager(
                 val iv = buf.copyOfRange(0, 12)
                 val ctTag = buf.copyOfRange(12, buf.size)
                 Gcm.decryptCekWrap(devKek, iv, ctTag)
-            } catch (_: Exception) { null }
+            } catch (e: Exception) { Log.w("LicenseManager", "cached CEK unwrap failed: ${e.message}"); null }
         }) ?: run {
             // 2) derive KEK from userCode (+shard) and unwrap CEK from license
             val userCode = store.get(keys.userCode) ?: error("Missing userCode32")
@@ -136,17 +137,23 @@ class LicenseManager(
             val ikm = if (shard != null) userCode + shard else userCode
             val info = man.aad.toByteArray()
             val kekBytes = HKDF.sha256(ikm, man.wrap.salt, info, 32)
-            val cekBytes = Gcm.decryptCekWrap(kekBytes, man.wrap.iv, man.wrappedCek, aadBytes)
-
-            // 3) rewrap CEK with device KEK and cache as IV||ct+tag
-            val devKek = deviceKek.derive(man.modelId)
-            val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
-            val ctTag = Cipher.getInstance("AES/GCM/NoPadding").run {
-                init(Cipher.ENCRYPT_MODE, SecretKeySpec(devKek, "AES"), GCMParameterSpec(128, iv))
-                doFinal(cekBytes)
+            try {
+                val cekBytes = Gcm.decryptCekWrap(kekBytes, man.wrap.iv, man.wrappedCek, aadBytes)
+                Log.i("LicenseManager", "unwrap success modelId=${man.modelId} shardPresent=${shard != null}")
+                // 3) rewrap CEK with device KEK and cache as IV||ct+tag
+                val devKek = deviceKek.derive(man.modelId)
+                val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
+                val ctTag = Cipher.getInstance("AES/GCM/NoPadding").run {
+                    init(Cipher.ENCRYPT_MODE, SecretKeySpec(devKek, "AES"), GCMParameterSpec(128, iv))
+                    doFinal(cekBytes)
+                }
+                store.put(keys.deviceWrappedCek, iv + ctTag)
+                cekBytes
+            } catch (e: Exception) {
+                Log.e("LicenseManager", "unwrap failed modelId=${man.modelId}: ${e.message}")
+                throw e
             }
-            store.put(keys.deviceWrappedCek, iv + ctTag)
-            cekBytes
+
         }
 
         // 4) decrypt model.enc from assets → temp file
@@ -160,7 +167,10 @@ class LicenseManager(
         // 5) verify integrity (optional)
         if (verify) {
             val sha = sha256OfFile(tmp)
-            val expected = Base64Url.dec(man.plainSha256B64Url)
+            val expected = B64Url.dec(man.plainSha256B64Url)
+            if (!sha.contentEquals(expected)) {
+                Log.e("LicenseManager", "Integrity check failed modelId=${man.modelId}")
+            }
             require(sha.contentEquals(expected)) { "Integrity check failed: SHA-256 mismatch" }
         }
         return tmp
