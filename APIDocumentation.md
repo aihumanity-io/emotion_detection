@@ -127,6 +127,11 @@ typedef OnImage     = Image Function(imagelib.Image? image);
 * Draws bounding boxes via `FaceDetectorPainter`.
 * Displays `_text` as the top prediction (e.g., “happy”, “neutral”…).
 
+Usage notes
+- Call `WidgetsFlutterBinding.ensureInitialized()` and `await availableCameras()` before mounting.
+- Provide an `EmotionDetectorViewController` to trigger snapshots (`takeSnapShot`) or delegate picture capture (`takePicture`).
+- In callbacks, handle `null`/empty payloads; native inference returns a `Map<String, double>` for emotions.
+
 ### `CekSecretClient.fetchCekSecret`
 
 Utility for calling `GET /sdk/cek-secret` with your SDK key pair. Signs the
@@ -138,10 +143,12 @@ code), `cekShardB64` (server-held shard), and `expiresAt` (ms epoch).
 final cek = await CekSecretClient.fetchCekSecret(
   apiKeyId: '<sdk-key-id>',
   apiKeySecret: '<sdk-key-secret>',
-  modelKey: 'aih_fer2025',
-  aad: 'com.creataai.emotionsdk/ios',
-  overrideBaseUrl: 'https://staging.creata.ai',
-  cacheShardOnIOS: true, // optionally cache a shard lease when present
+  modelKey: 'example_model',
+  aad: 'com.example.app/ios',
+  overrideBaseUrl: 'https://api.example.com',
+  cacheShardOnIOS: true, // optionally cache a shard lease when present (iOS only)
+  methodChannelName: 'face_emotion_detection', // optional override
+  modelIdForShard: 'example_model', // optional override used when caching shard
 );
 ```
 
@@ -149,6 +156,11 @@ final cek = await CekSecretClient.fetchCekSecret(
 * Pass `overrideBaseUrl` per call to target alternate stacks.
 * When the call fails or returns malformed JSON the method logs via
   `debugPrint` and resolves to `null`.
+
+When `cacheShardOnIOS` is true on iOS and the payload contains shard fields
+(e.g., `kekShardB64` or `cekShardB64`), the client will set the shard via
+`ModelRuntime.setKeyShard` using the provided `modelKey` (or `modelIdForShard`)
+and any expiry hints (`expiresAt` / `cekSecretExpiresAt`).
 
 ### `UserCodeChannel.saveUserCode`
 
@@ -158,7 +170,7 @@ your backend returns a 32-byte base64 user code so iOS can satisfy
 
 ```dart
 await UserCodeChannel.saveUserCode(
-  userName: 'dev@tartalabs.io',
+  userName: 'user@example.com',
   userCodeB64: (cekPayload['userCodeB64'] ?? cekPayload['userSecretB64']) as String,
 );
 ```
@@ -176,7 +188,7 @@ Currently implemented on iOS; Android parity is in progress.
 
 ```dart
 await ModelRuntime.setKeyShard(
-  modelId: 'mobilenetv1_fer2024-11-06-08-48-50',
+  modelId: 'example_model',
   keyShardB64: cekPayload['cekShardB64'] as String,
   expiresAtMs: cekPayload['expiresAt'] as int?,
 );
@@ -185,6 +197,36 @@ await ModelRuntime.setKeyShard(
 If the manifest contains `"shard_required": true` and no valid shard is
 present, the iOS loader refuses to unwrap the CEK until a fresh shard is set.
 
+### `ModelRuntime` lifecycle (iOS implemented)
+
+```dart
+// initialize channel once
+ModelRuntime('face_emotion_detection');
+
+// register a bundled encrypted model
+await ModelRuntime.registerModel(
+  modelId: 'example_model',
+  resourceBase: 'example_model',
+  encExt: 'onnx.enc',
+  hkdfInfo: 'model_runtime',
+  masterKeyB64: null, // optional
+);
+
+// set shard (if required) then warm up
+await ModelRuntime.setKeyShard(modelId: 'example_model', keyShardB64: shard);
+await ModelRuntime.warmUp('example_model');
+
+// run inference
+final result = await ModelRuntime.predict('example_model', inputs);
+
+// unload when done
+await ModelRuntime.unload('example_model');
+```
+
+`registerModel`, `warmUp`, `predict`, and `unload` route over the platform
+MethodChannel (`face_emotion_detection`). Parameter names and types match the
+Dart signatures above; `predict` returns a `Map<String, dynamic>`.
+
 ---
 
 ## Notes & constraints
@@ -192,6 +234,19 @@ present, the iOS loader refuses to unwrap the CEK until a fresh shard is set.
 * Requires camera permission and a device/simulator that supports camera preview.
 * Face detection and inference run sequentially; heavy workloads may reduce FPS.
 * The widget internally guards with `_isBusy` to avoid overlapping inference calls.
+
+## Errors and troubleshooting
+
+- Native bridge error codes (returned as `FlutterError`):
+  - `model_load_error`: model failed to load/compile/decrypt.
+  - `user_code_error`: invalid or missing user code when setting/clearing.
+  - `invalid_args` / `bad_args`: missing required fields in channel calls.
+  - `shard_store_error`: shard base64 invalid or could not be cached (iOS).
+- Manifest/shard validation (iOS): when `shard_required` is true and no valid
+  shard or an expired shard is present, CEK unwrap fails until a fresh shard is set.
+- Ensure `WidgetsFlutterBinding.ensureInitialized()` and `availableCameras()`
+  are called before mounting `EmotionDetectorView` to avoid
+  `MissingPluginException` or camera availability issues.
 
 ---
 
