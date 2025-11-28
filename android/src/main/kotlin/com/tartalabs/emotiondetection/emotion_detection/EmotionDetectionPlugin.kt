@@ -190,12 +190,16 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
   private fun provisionUserCodeIfNeeded(
     licMgr: LicenseManager
   ) {
-    val b64 = _appContext.getString(
-      com.tartalabs.emotiondetection.emotion_detection.R.string.emotion_bundled_code_b64
-    ).trim()
-    if (b64.isNotEmpty()) {
-      val bytes = Base64.decode(b64, Base64.NO_WRAP)
-      licMgr.saveUserCode(bytes)
+    try {
+      val b64 = _appContext.getString(
+        com.tartalabs.emotiondetection.emotion_detection.R.string.emotion_bundled_code_b64
+      ).trim()
+      if (b64.isNotEmpty()) {
+        val bytes = Base64.decode(b64, Base64.NO_WRAP)
+        licMgr.saveUserCode(bytes)
+      }
+    } catch (_: Exception) {
+      // Optional bundled code not present; ignore.
     }
   }
 
