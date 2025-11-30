@@ -145,7 +145,7 @@ class LicenseManager(
                 error("Manifest expects shard, but none stored")
             }
             val ikm = if (shard != null) userCode + shard else userCode
-            val info = man.aad.toByteArray()
+            val info = "model:${man.modelId}".toByteArray()
             val kekBytes = HKDF.sha256(ikm, man.wrap.salt, info, 32)
             try {
                 Log.i(
