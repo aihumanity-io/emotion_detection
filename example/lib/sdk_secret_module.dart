@@ -166,7 +166,8 @@ class ExampleSdkSecretModule {
       final secrets = extractModelSecrets(payload);
       for (final secret in secrets) {
         if (secret.modelKey == modelKey) {
-          final fromModel = _extractUserCodeFrom(secret.raw);
+          final fromModel =
+              secret.raw == null ? null : _extractUserCodeFrom(secret.raw!);
           if (fromModel != null) return fromModel;
         }
       }
