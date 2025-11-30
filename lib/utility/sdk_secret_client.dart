@@ -41,8 +41,9 @@ class CekSecretClient {
     final signature = base64Encode(hmac.convert(utf8.encode(canonical)).bytes);
 
     final queryParams = <String, String>{'modelKey': modelKey};
-    if (aad != null && aad.isNotEmpty) {
-      queryParams['aad'] = aad;
+    final normalizedAad = aad?.trim().toLowerCase();
+    if (normalizedAad != null && normalizedAad.isNotEmpty) {
+      queryParams['aad'] = normalizedAad;
     }
 
     final uri =
