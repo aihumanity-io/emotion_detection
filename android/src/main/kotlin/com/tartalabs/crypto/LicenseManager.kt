@@ -138,7 +138,8 @@ class LicenseManager(
             val shard = store.get(keys.shard)
             Log.i(
                 "LicenseManager",
-                "unwrap with userCode.len=${userCode.size} shard.len=${shard?.size ?: 0} shardRequired=${man.wrap.shardRequired}"
+                "unwrap with userCode.len=${userCode.size} shard.len=${shard?.size ?: 0} " +
+                        "shardRequired=${man.wrap.shardRequired} userHash=${Hash.sha256(userCode).toHexPrefix()} shardHash=${shard?.let { Hash.sha256(it).toHexPrefix() }}"
             )
             if (man.wrap.shardRequired && shard == null) {
                 error("Manifest expects shard, but none stored")
@@ -150,7 +151,8 @@ class LicenseManager(
                 val cekBytes = Gcm.decryptCekWrap(kekBytes, man.wrap.iv, man.wrappedCek, aadBytes)
                 Log.i(
                     "LicenseManager",
-                    "unwrap success modelId=${man.modelId} shardPresent=${shard != null} cek.len=${cekBytes.size}"
+                    "unwrap success modelId=${man.modelId} shardPresent=${shard != null} cek.len=${cekBytes.size} " +
+                            "kekHash=${Hash.sha256(kekBytes).toHexPrefix()} info='${man.aad}'"
                 )
                 // 3) rewrap CEK with device KEK and cache as IV||ct+tag
                 val devKek = deviceKek.derive(man.modelId)

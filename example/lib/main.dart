@@ -36,7 +36,7 @@ class _MyAppState extends State<MyApp> {
   static const bool _kOneTimeClearCaches = false;
   bool _didClearCaches = false;
 
-  static  Map<String, String> _modelAccountIds = {
+  static Map<String, String> _modelAccountIds = {
     'aih_fer20250115': 'aih_fer20250115_v2025-01-15-shard',
     'mobilenetv1_fer2024-11-06-08-48-50':
         'mobilenetv1_fer2024-11-06-08-48-50_v2025-01-15-shard',
@@ -56,10 +56,10 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    if(Platform.isAndroid) {
+    if (Platform.isAndroid) {
       _modelAccountIds = {
         'mobilenetv1_fer2024-11-06-08-48-50':
-        'mobilenetv1_fer2024-11-06-08-48-50',
+            'mobilenetv1_fer2024-11-06-08-48-50',
       };
     }
 
@@ -171,7 +171,7 @@ class _MyAppState extends State<MyApp> {
               try {
                 if (kDebugMode) {
                   debugPrint(
-                      'Storing user code for $modelKey len=${userCodeB64.length}');
+                      'Storing user code for $modelKey len=${userCodeB64.length} b64prefix=${userCodeB64.substring(0, math.min(8, userCodeB64.length))}');
                 }
                 await UserCodeChannel.saveUserCode(
                   userName: _sdkSecretModule.userName,
@@ -197,7 +197,7 @@ class _MyAppState extends State<MyApp> {
                 try {
                   if (kDebugMode) {
                     debugPrint(
-                        'Storing shard for $modelKey len=${shardB64.length} exp=$expiresAtMs');
+                        'Storing shard for $modelKey len=${shardB64.length} b64prefix=${shardB64.substring(0, math.min(8, shardB64.length))} exp=$expiresAtMs');
                   }
                   for (final id in _allModelIds(modelKey)) {
                     await ModelRuntime.setKeyShard(

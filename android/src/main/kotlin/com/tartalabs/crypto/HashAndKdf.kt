@@ -12,6 +12,14 @@ object Hash {
         MessageDigest.getInstance("SHA-256").digest(data)
 }
 
+fun ByteArray.toHexPrefix(len: Int = 8): String {
+    val sb = StringBuilder()
+    for (i in 0 until minOf(len, this.size)) {
+        sb.append(String.format("%02x", this[i]))
+    }
+    return sb.toString()
+}
+
 object HKDF {
     fun sha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
         val mac = Mac.getInstance("HmacSHA256")
