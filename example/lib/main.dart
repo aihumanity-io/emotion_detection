@@ -167,7 +167,8 @@ class _MyAppState extends State<MyApp> {
               continue;
             }
             final accountId = _accountModelId(modelKey);
-            final userCodeB64 = _sdkSecretModule.extractUserCode(res.payload);
+            final userCodeB64 = _sdkSecretModule.extractUserCode(res.payload,
+                modelKey: modelKey);
             if (userCodeB64 != null) {
               try {
                 if (kDebugMode) {

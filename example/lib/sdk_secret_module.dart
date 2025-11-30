@@ -44,12 +44,14 @@ class ModelSecret {
     required this.shardB64,
     this.expiresAtMs,
     this.shardRequired,
+    this.raw,
   });
 
   final String modelKey;
   final String shardB64;
   final int? expiresAtMs;
   final bool? shardRequired;
+  final Map<String, dynamic>? raw;
 }
 
 /// Payload plus the modelKey it was requested with.
@@ -158,7 +160,21 @@ class ExampleSdkSecretModule {
   /// errors to the user/operator so they can register the platform AAD if
   /// missing.
 
-  String? extractUserCode(Map<String, dynamic> payload) {
+  String? extractUserCode(Map<String, dynamic> payload, {String? modelKey}) {
+    // Prefer model-scoped secrets when modelKey is provided
+    if (modelKey != null && modelKey.isNotEmpty) {
+      final secrets = extractModelSecrets(payload);
+      for (final secret in secrets) {
+        if (secret.modelKey == modelKey) {
+          final fromModel = _extractUserCodeFrom(secret.raw);
+          if (fromModel != null) return fromModel;
+        }
+      }
+    }
+    return _extractUserCodeFrom(payload);
+  }
+
+  String? _extractUserCodeFrom(Map<String, dynamic> payload) {
     for (final key in const [
       'userCodeB64',
       'userSecretB64',
@@ -234,6 +250,7 @@ class ExampleSdkSecretModule {
         shardB64: shard,
         expiresAtMs: expiresAtMs,
         shardRequired: shardRequired,
+        raw: item,
       ));
     }
     return out;
