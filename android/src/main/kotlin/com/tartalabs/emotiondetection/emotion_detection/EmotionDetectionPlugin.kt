@@ -17,7 +17,7 @@ import java.nio.channels.FileChannel
 import com.tartalabs.crypto.LicenseManager
 import android.util.Base64
 
-val modelId = "mobilenetv1_2024-11-03-19-24-14"
+val modelId = "mobilenetv1_fer2024-11-06-08-48-50"
 /** EmotionDetectionPlugin */
 class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
   /// The MethodChannel that will the communication between Flutter and native Android
