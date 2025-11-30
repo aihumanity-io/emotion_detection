@@ -117,7 +117,11 @@ class LicenseManager(
     fun openModel(manifestJson: String, verify: Boolean = true): File {
         val man = Parsers.manifestFrom(manifestJson)
         val aadBytes = if (man.aad.isNotEmpty()) man.aad.toByteArray() else null
-        Log.i("LicenseManager", "openModel modelId=${man.modelId} shardRequired=${man.wrap.shardRequired} aad='${man.aad}'")
+        Log.i(
+            "LicenseManager",
+            "openModel modelId=${man.modelId} shardRequired=${man.wrap.shardRequired} " +
+                    "aad='${man.aad}' wrap.iv.len=${man.wrap.iv.size} wrap.salt.len=${man.wrap.salt.size}"
+        )
 
         // 1) try cached CEK (device-KEK rewrap)
         val cached = store.get(keys.deviceWrappedCek)
@@ -132,6 +136,10 @@ class LicenseManager(
             // 2) derive KEK from userCode (+shard) and unwrap CEK from license
             val userCode = store.get(keys.userCode) ?: error("Missing userCode32")
             val shard = store.get(keys.shard)
+            Log.i(
+                "LicenseManager",
+                "unwrap with userCode.len=${userCode.size} shard.len=${shard?.size ?: 0} shardRequired=${man.wrap.shardRequired}"
+            )
             if (man.wrap.shardRequired && shard == null) {
                 error("Manifest expects shard, but none stored")
             }
@@ -140,7 +148,10 @@ class LicenseManager(
             val kekBytes = HKDF.sha256(ikm, man.wrap.salt, info, 32)
             try {
                 val cekBytes = Gcm.decryptCekWrap(kekBytes, man.wrap.iv, man.wrappedCek, aadBytes)
-                Log.i("LicenseManager", "unwrap success modelId=${man.modelId} shardPresent=${shard != null}")
+                Log.i(
+                    "LicenseManager",
+                    "unwrap success modelId=${man.modelId} shardPresent=${shard != null} cek.len=${cekBytes.size}"
+                )
                 // 3) rewrap CEK with device KEK and cache as IV||ct+tag
                 val devKek = deviceKek.derive(man.modelId)
                 val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
