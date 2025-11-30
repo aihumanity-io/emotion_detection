@@ -56,6 +56,8 @@ class CekSecretClient {
 
     final httpClient = client ?? http.Client();
     try {
+      debugPrint(
+          'fetchCekSecret request: modelKey=$modelKey aad=${queryParams['aad'] ?? ''} uri=$uri');
       final resp = await httpClient.get(uri, headers: headers);
       if (resp.statusCode != 200) {
         debugPrint('fetchCekSecret failed: ${resp.statusCode} ${resp.body}');

@@ -17,6 +17,9 @@ const List<String> _exampleModelKeys = <String>[
   'aih_fer20250115',
   'mobilenetv1_fer2024-11-06-08-48-50',
 ];
+const List<String> _androidModelKeys = <String>[
+  'mobilenetv1_fer2024-11-06-08-48-50',
+];
 const String _exampleAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD',
   defaultValue: 'com.creataai.emotionsdk/ios',
@@ -105,9 +108,10 @@ class ExampleSdkSecretModule {
   /// payloads in order. Each call only includes the shard for the requested
   /// model key.
   Future<List<CekSecretResult>> fetchAllCekSecrets(
-      {String? aadOverride}) async {
+      {String? aadOverride, List<String>? modelKeys}) async {
     final results = <CekSecretResult>[];
-    for (final key in _modelKeys) {
+    final keys = modelKeys ?? _modelKeys;
+    for (final key in keys) {
       final res = await CekSecretClient.fetchCekSecret(
         apiKeyId: _apiKeyId,
         apiKeySecret: _apiKeySecret,
@@ -136,12 +140,23 @@ class ExampleSdkSecretModule {
 
   List<String> get modelKeys => _modelKeys;
 
+  List<String> modelKeysForPlatform(TargetPlatform platform) {
+    if (platform == TargetPlatform.android) {
+      return _androidModelKeys;
+    }
+    return _modelKeys;
+  }
+
   String aadForPlatform(TargetPlatform platform) {
     if (platform == TargetPlatform.android) {
       return _androidAad;
     }
     return _aad;
   }
+
+  /// Returns the AAD to request based on platform; callers should surface 403
+  /// errors to the user/operator so they can register the platform AAD if
+  /// missing.
 
   String? extractUserCode(Map<String, dynamic> payload) {
     for (final key in const [

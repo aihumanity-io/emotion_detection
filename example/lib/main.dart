@@ -127,7 +127,11 @@ class _MyAppState extends State<MyApp> {
       _cekSecretStatus = 'Requesting /sdk/cek-secret...';
     });
     final aad = _sdkSecretModule.aadForPlatform(defaultTargetPlatform);
-    final results = await _sdkSecretModule.fetchAllCekSecrets(aadOverride: aad);
+    final keys = _sdkSecretModule.modelKeysForPlatform(defaultTargetPlatform);
+    final results = await _sdkSecretModule.fetchAllCekSecrets(
+      aadOverride: aad,
+      modelKeys: keys,
+    );
     String status = 'fetchCekSecret returned null (see logs).';
     if (results.isNotEmpty) {
       status = 'Received ${results.length} response(s)';
