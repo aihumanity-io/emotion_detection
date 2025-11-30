@@ -164,6 +164,7 @@ class LicenseManager(
                 Gcm.decryptModelTo(cek, man.gcmIv, enc, out, aad = aadBytes)
             }
         }
+        Log.i("LicenseManager", "decrypt ok modelId=${man.modelId} out=${tmp.absolutePath}")
 
         // 5) verify integrity (optional)
         if (verify) {

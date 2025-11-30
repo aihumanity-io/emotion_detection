@@ -230,12 +230,18 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
     val modelBase = spec.resourceBase
     val manifestName = "$modelBase.manifest.json"
     Log.i(TAG, "loading manifest: $manifestName for modelId=$modelId")
-    val manifestJson = _appContext.assets.open(manifestName).bufferedReader().use { it.readText() }
-    val dec = licMgr.openModel(manifestJson = manifestJson, verify = true)
-    FileInputStream(dec).channel.use { ch ->
-      val mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size())
-      models[modelId] = mapped
-      _emotionPredictor = EmotionMoblenet(_appContext, mapped)
+    try {
+      val manifestJson = _appContext.assets.open(manifestName).bufferedReader().use { it.readText() }
+      val dec = licMgr.openModel(manifestJson = manifestJson, verify = true)
+      FileInputStream(dec).channel.use { ch ->
+        val mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size())
+        models[modelId] = mapped
+        _emotionPredictor = EmotionMoblenet(_appContext, mapped)
+        Log.i(TAG, "model loaded and mapped: $modelId size=${ch.size()}")
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "loadModelIfNeeded failed for $modelId: ${e.message}", e)
+      throw e
     }
   }
 
