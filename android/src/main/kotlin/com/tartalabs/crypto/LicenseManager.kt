@@ -148,6 +148,10 @@ class LicenseManager(
             val info = man.aad.toByteArray()
             val kekBytes = HKDF.sha256(ikm, man.wrap.salt, info, 32)
             try {
+                Log.i(
+                    "LicenseManager",
+                    "unwrap input modelId=${man.modelId} kekHash=${Hash.sha256(kekBytes).toHexPrefix()} info='${man.aad}' saltHash=${Hash.sha256(man.wrap.salt).toHexPrefix()} ivHash=${Hash.sha256(man.wrap.iv).toHexPrefix()}"
+                )
                 val cekBytes = Gcm.decryptCekWrap(kekBytes, man.wrap.iv, man.wrappedCek, aadBytes)
                 Log.i(
                     "LicenseManager",
