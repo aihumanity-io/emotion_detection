@@ -65,6 +65,10 @@ class _MyAppState extends State<MyApp> {
     }
 
     initPlatformState();
+    // Automatically fetch CEK secret on startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchCekSecret();
+    });
   }
 
   // Platform messages are asynchronous, so we initialize in an async method.
@@ -244,33 +248,7 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: _userCodeReady
-            ? EmotionDetectorView(controller: controller)
-            : Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 24),
-                      Text(
-                        _cekSecretStatus,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: _fetchingCekSecret ? null : _fetchCekSecret,
-                        child: Text(
-                          _fetchingCekSecret
-                              ? 'Fetching SDK secret...'
-                              : 'Fetch SDK CEK secret',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+        body: EmotionDetectorView(controller: controller),
       ),
     );
   }
