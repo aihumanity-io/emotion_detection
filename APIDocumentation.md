@@ -197,6 +197,11 @@ await ModelRuntime.setKeyShard(
 If the manifest contains `"shard_required": true` and no valid shard is
 present, the iOS loader refuses to unwrap the CEK until a fresh shard is set.
 
+> iOS shard tip: Pass the shard base64 to `ModelRuntime.setKeyShard` exactly as
+> received (do not normalize/trim/pad). The loader uses the original base64 in
+> its AAD when deriving the KEK; altering it will trigger CryptoKit error 3
+> during decryption.
+
 ### `ModelRuntime` lifecycle (iOS implemented)
 
 ```dart

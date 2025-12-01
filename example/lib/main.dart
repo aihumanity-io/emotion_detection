@@ -34,6 +34,9 @@ class _MyAppState extends State<MyApp> {
   String _cekSecretStatus = 'Not requested yet.';
   bool _fetchingCekSecret = false;
   bool _userCodeReady = false;
+  bool _modelsReady = false;
+  bool _initializingModels = false;
+  String _modelInitStatus = 'Waiting for user code to initialize models.';
   static const bool _kOneTimeClearCaches = false;
   bool _didClearCaches = false;
 
@@ -97,6 +100,64 @@ class _MyAppState extends State<MyApp> {
     ModelRuntime(_methodChannelName);
   }
 
+  Future<void> _initializeModelsIfReady() async {
+    if (!_userCodeReady || _modelsReady || _initializingModels) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _initializingModels = true;
+        _modelInitStatus = 'Initializing models...';
+      });
+    }
+
+    try {
+      _ensureModelRuntimeChannel();
+      final modelIds = _sdkSecretModule
+          .modelKeysForPlatform(defaultTargetPlatform)
+          .where((key) {
+            if (defaultTargetPlatform == TargetPlatform.android &&
+                key == 'aih_fer20250115') {
+              return false;
+            }
+            return true;
+          })
+          .expand((key) => _allModelIds(key))
+          .toSet();
+
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        for (final modelId in modelIds) {
+          try {
+            final warmed = await ModelRuntime.warmUp(modelId);
+            if (kDebugMode) {
+              debugPrint('Warm-up complete for $modelId: $warmed');
+            }
+          } catch (error) {
+            debugPrint('Warm-up failed for $modelId: $error');
+            rethrow;
+          }
+        }
+      } else {
+        if (kDebugMode) {
+          debugPrint(
+              'Skipping warm-up on $defaultTargetPlatform; not supported.');
+        }
+      }
+
+      _modelsReady = true;
+      _modelInitStatus = 'Models ready';
+    } catch (error) {
+      _modelInitStatus = 'Model init failed: $error';
+      _modelsReady = false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _initializingModels = false;
+        });
+      }
+    }
+  }
+
   Future<void> _maybeClearCaches() async {
     if (!_kOneTimeClearCaches || _didClearCaches) return;
     _didClearCaches = true;
@@ -138,6 +199,8 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       _fetchingCekSecret = true;
       _cekSecretStatus = 'Requesting /sdk/cek-secret...';
+      _modelsReady = false;
+      _modelInitStatus = 'Waiting for user code to initialize models.';
     });
     final aad = _sdkSecretModule.aadForPlatform(defaultTargetPlatform);
     final keys = _sdkSecretModule.modelKeysForPlatform(defaultTargetPlatform);
@@ -208,8 +271,9 @@ class _MyAppState extends State<MyApp> {
                   for (final id in _allModelIds(modelKey)) {
                     await ModelRuntime.setKeyShard(
                       modelId: id,
-                      keyShardB64: _sdkSecretModule.normalizeShard(shardB64),
+                      keyShardB64: shardB64,
                       expiresAtMs: expiresAtMs,
+                      userName: _sdkSecretModule.userName,
                     );
                   }
                   shardCount++;
@@ -227,10 +291,12 @@ class _MyAppState extends State<MyApp> {
             status = shardCount > 0
                 ? 'User codes stored ($storedUserCodes); shards stored ($shardCount/${results.length})'
                 : 'User codes stored ($storedUserCodes); no shards in responses.';
+            await _initializeModelsIfReady();
           }
         } catch (error) {
           status = 'Failed to store user code/shard: $error';
           _userCodeReady = false;
+          _modelsReady = false;
         }
       }
     }
@@ -243,12 +309,59 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final body = !_userCodeReady
+        ? _buildUserCodeWaiting()
+        : (_modelsReady
+            ? EmotionDetectorView(controller: controller)
+            : _buildModelInit());
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: EmotionDetectorView(controller: controller),
+        body: body,
+      ),
+    );
+  }
+
+  Widget _buildUserCodeWaiting() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_cekSecretStatus, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _fetchingCekSecret ? null : _fetchCekSecret,
+              child:
+                  Text(_fetchingCekSecret ? 'Requesting...' : 'Fetch secrets'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModelInit() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_initializingModels) const CircularProgressIndicator(),
+            if (_initializingModels) const SizedBox(height: 12),
+            Text(_modelInitStatus, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed:
+                  _initializingModels ? null : () => _initializeModelsIfReady(),
+              child: const Text('Retry model init'),
+            ),
+          ],
+        ),
       ),
     );
   }
