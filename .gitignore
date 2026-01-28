@@ -48,4 +48,5 @@ example/linux/flutter/ephemeral/
 .DS_Store
 *.log
 *.lock.json
+example/defines.json
 Generated.xcconfig

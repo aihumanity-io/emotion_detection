@@ -302,4 +302,3 @@ Internal release
 
 ---
 
-If you want, I can also generate a trimmed **API-only** README or a **developer doc** explaining the native side (Swift/Kotlin/C++ structure and expected model files).

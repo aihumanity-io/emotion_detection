@@ -9,7 +9,7 @@ Real-time emotion detection widget using the device camera, Google ML Kit face d
 
 ```yaml
 dependencies:
-  emotion_detection: ^0.0.1
+  emotion_detection: ^0.1.0
 ```
 
 ```bash
