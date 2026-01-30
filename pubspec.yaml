@@ -1,6 +1,6 @@
 name: emotion_detection
-description: "A new Flutter plugin project."
-version: 0.1.0
+description: "Emotion detection SDK."
+version: 0.2.0
 homepage:
 
 environment:

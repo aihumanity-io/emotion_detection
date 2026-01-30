@@ -1,10 +1,7 @@
-Awesome—thanks for sharing the files. Based on your `emotion_detector_view.dart`, `pubspec.yaml`, and example app, here’s a clean, ready-to-drop-in **README.md** for your Flutter plugin.
-
----
 
 # emotion\_detection
 
-Real-time emotion detection widget for Flutter using the device camera, Google ML Kit face detection, and a native emotion classifier.
+Real-time emotion detection widget for Flutter using the device camera, and our native emotion classifier.
 
 ## ✨ Features
 
@@ -290,13 +287,12 @@ A minimal example is included (snippet adapted from `example.dart`). It initiali
 
 ## 📝 License
 
-Internal release
+Contact us for licensing terms. @Copyright 2024-2026
 
 ---
 
 ## 👏 Acknowledgements
 
-* Google ML Kit Face Detection
 * Flutter `camera` plugin
 * `image` (Dart image processing)
 

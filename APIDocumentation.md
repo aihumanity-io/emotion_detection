@@ -162,6 +162,25 @@ When `cacheShardOnIOS` is true on iOS and the payload contains shard fields
 `ModelRuntime.setKeyShard` using the provided `modelKey` (or `modelIdForShard`)
 and any expiry hints (`expiresAt` / `cekSecretExpiresAt`).
 
+### `CekSecretUtils` helpers
+
+Reusable helpers to interpret CEK-secret payloads and model-scoped entries:
+
+```dart
+import 'package:emotion_detection/emotion_detection.dart';
+
+final userCode = CekSecretUtils.extractUserCode(payload, modelKey: 'model_a');
+final shardB64 = CekSecretUtils.extractShard(payload, modelKey: 'model_a');
+final expires  = CekSecretUtils.extractExpiresAtMs(payload, modelKey: 'model_a');
+final entries  = CekSecretUtils.extractModelSecrets(payload);
+
+// Optional: normalize URL-safe base64 to standard
+final normalized = CekSecretUtils.normalizeBase64(shardB64 ?? '');
+```
+
+Returned `entries` contain `modelKey`, `shardB64`, optional `expiresAtMs`, and
+`shardRequired`. These helpers are platform-agnostic and safe to use in apps.
+
 ### `UserCodeChannel.saveUserCode`
 
 Bridges user code delivery from Dart into the platform keychain. Call it after
