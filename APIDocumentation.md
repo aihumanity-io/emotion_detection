@@ -52,11 +52,17 @@ import 'package:flutter/material.dart';
 import 'package:emotion_detection/emotion_detection.dart';
 import 'package:camera/camera.dart';
 import 'package:image/image.dart' as imagelib;
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await availableCameras(); // ensures camera availability
+  // Only warm up cameras on mobile where the camera plugin is available.
+  if (Platform.isAndroid || Platform.isIOS) {
+    try {
+      await availableCameras();
+    } catch (_) {}
+  }
   runApp(const MyApp());
 }
 
@@ -128,7 +134,9 @@ typedef OnImage     = Image Function(imagelib.Image? image);
 * Displays `_text` as the top prediction (e.g., “happy”, “neutral”…).
 
 Usage notes
-- Call `WidgetsFlutterBinding.ensureInitialized()` and `await availableCameras()` before mounting.
+- Call `WidgetsFlutterBinding.ensureInitialized()` before mounting.
+- On iOS/Android, warm up cameras with `await availableCameras()` before mounting.
+- Desktop platforms currently do not initialize the camera widget; guard camera calls by platform.
 - Provide an `EmotionDetectorViewController` to trigger snapshots (`takeSnapShot`) or delegate picture capture (`takePicture`).
 - In callbacks, handle `null`/empty payloads; native inference returns a `Map<String, double>` for emotions.
 
@@ -268,9 +276,11 @@ Dart signatures above; `predict` returns a `Map<String, dynamic>`.
   - `shard_store_error`: shard base64 invalid or could not be cached (iOS).
 - Manifest/shard validation (iOS): when `shard_required` is true and no valid
   shard or an expired shard is present, CEK unwrap fails until a fresh shard is set.
-- Ensure `WidgetsFlutterBinding.ensureInitialized()` and `availableCameras()`
-  are called before mounting `EmotionDetectorView` to avoid
+- iOS/Android: call `WidgetsFlutterBinding.ensureInitialized()` and then
+  `await availableCameras()` before mounting the widget to avoid
   `MissingPluginException` or camera availability issues.
+- Desktop: the sample guards camera warm-up; desktop camera preview is not yet
+  supported. Do not call `availableCameras()` on desktop.
 
 ---
 
@@ -278,8 +288,12 @@ Dart signatures above; `predict` returns a `Map<String, dynamic>`.
 
 * **MissingPluginException / camera not found**
 
-    * Call `WidgetsFlutterBinding.ensureInitialized()` and `await availableCameras()` before `runApp`.
-    * Fully restart the app after adding native plugins (hot reload won’t register them).
+    * Mobile: call `WidgetsFlutterBinding.ensureInitialized()` and
+      `await availableCameras()` before `runApp`.
+    * Desktop: guard camera calls by platform; desktop camera is not wired
+      up yet. If you need it, add a macOS-capable camera plugin and confirm it
+      appears in `example/macos/Flutter/GeneratedPluginRegistrant.swift`.
+    * Fully restart after adding native plugins (hot reload won’t register them).
 
 * **iOS “kUTTypeJPEG not found”**
 

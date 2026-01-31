@@ -80,6 +80,10 @@ flutter pub get
   <true/>
   ```
 
+> Note: Live camera preview in `EmotionDetectorView` is currently targeted for
+> iOS/Android. The example app guards `availableCameras()` on desktop to avoid
+> `MissingPluginException`. Desktop camera support is on the roadmap.
+
 ### Web
 
 * Ensure the page is served over HTTPS and user grants camera access.
@@ -97,11 +101,14 @@ flutter pub get
 import 'package:flutter/material.dart';
 import 'package:emotion_detection/emotion_detection.dart'; // plugin entrypoint
 import 'package:camera/camera.dart';
+import 'dart:io' show Platform;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Ensures cameras are available before runApp
-  await availableCameras();
+  // Warm up camera on mobile only to avoid MissingPluginException on desktop/web.
+  if (Platform.isAndroid || Platform.isIOS) {
+    try { await availableCameras(); } catch (_) {}
+  }
   runApp(const MyApp());
 }
 
@@ -297,4 +304,3 @@ Contact us for licensing terms. @Copyright 2024-2026
 * `image` (Dart image processing)
 
 ---
-

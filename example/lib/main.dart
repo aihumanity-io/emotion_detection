@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:io';
+import 'dart:io' show Platform;
 
 import 'package:camera/camera.dart';
 import 'package:emotion_detection/emotion_detection.dart';
@@ -14,7 +14,14 @@ import 'sdk_secret_module.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final cams = await availableCameras();
+  // Guard camera warm-up on desktop/web to avoid MissingPluginException.
+  if (Platform.isAndroid || Platform.isIOS) {
+    try {
+      await availableCameras();
+    } catch (_) {
+      // Ignore; the widget will handle camera init later.
+    }
+  }
   runApp(MyApp());
 }
 
@@ -309,17 +316,38 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    final body = !_userCodeReady
-        ? _buildUserCodeWaiting()
-        : (_modelsReady
-            ? EmotionDetectorView(controller: controller)
-            : _buildModelInit());
+    final isMobile = Platform.isAndroid || Platform.isIOS;
+    final body = !isMobile
+        ? _buildUnsupportedPlatform()
+        : (!_userCodeReady
+            ? _buildUserCodeWaiting()
+            : (_modelsReady
+                ? EmotionDetectorView(controller: controller)
+                : _buildModelInit()));
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Emotion SDK Example'),
         ),
         body: body,
+      ),
+    );
+  }
+
+  Widget _buildUnsupportedPlatform() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Text(
+              'Desktop camera preview not supported yet.\n'
+              'Run on iOS/Android to try EmotionDetectorView.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
