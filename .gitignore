@@ -50,3 +50,4 @@ example/linux/flutter/ephemeral/
 *.lock.json
 example/defines.json
 Generated.xcconfig
+encryption_note.md
