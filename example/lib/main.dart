@@ -52,6 +52,7 @@ class _MyAppState extends State<MyApp> {
   static const bool _kOneTimeClearCaches = false;
   bool _didClearCaches = false;
   String? _macResult;
+  StreamSubscription<Map<String, double>>? _macCamSub;
 
   static Map<String, String> _modelAccountIds = {
     'aih_fer20250115': 'aih_fer20250115_v2025-01-15-shard',
@@ -381,13 +382,18 @@ class _MyAppState extends State<MyApp> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ElevatedButton(
-                  onPressed: _fetchingCekSecret ? null : _fetchCekSecret,
-                  child: Text(_fetchingCekSecret ? 'Requesting...' : 'Fetch secrets'),
+                  onPressed: _userCodeReady ? _pickAndPredictOnMac : null,
+                  child: const Text('Select image'),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
-                  onPressed: _userCodeReady ? _pickAndPredictOnMac : null,
-                  child: const Text('Select image'),
+                  onPressed: _userCodeReady && _macCamSub == null ? _startMacCamera : null,
+                  child: const Text('Start camera'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _macCamSub != null ? _stopMacCamera : null,
+                  child: const Text('Stop camera'),
                 ),
               ],
             ),
@@ -422,6 +428,42 @@ class _MyAppState extends State<MyApp> {
     } catch (e) {
       setState(() { _macResult = 'Error: $e'; });
     }
+  }
+
+  void _startMacCamera() {
+    try {
+      final ed = EmotionDetection();
+      final modelId = 'mobilenetv1_fer2024-11-06-08-48-50';
+      ed.macShowCameraPreview(modelId: modelId);
+      _macCamSub = ed.macCameraStream(modelId: modelId).listen((dist) {
+        String best = '';
+        double bestV = -1.0;
+        dist.forEach((k, v) {
+          final d = (v).toDouble();
+          if (d > bestV) {
+            bestV = d;
+            best = k;
+          }
+        });
+        if (mounted) {
+          setState(() {
+            _macResult = best.isEmpty
+                ? 'No output'
+                : '$best (${bestV.toStringAsFixed(3)})';
+          });
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _macResult = 'Camera error: $e';
+      });
+    }
+  }
+
+  Future<void> _stopMacCamera() async {
+    await _macCamSub?.cancel();
+    try { await EmotionDetection().macHideCameraPreview(); } catch (_) {}
+    _macCamSub = null;
   }
 
   Widget _buildUserCodeWaiting() {

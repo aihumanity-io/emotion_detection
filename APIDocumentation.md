@@ -41,7 +41,44 @@ Min SDK 21+ recommended.
 <true/>
 ```
 
+Also add to `example/macos/Runner/Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Camera access is required for emotion detection.</string>
+```
+
 **Web**: Serve over HTTPS; user must grant camera permission.
+
+### macOS camera stream (live predictions)
+
+On macOS, the plugin exposes an EventChannel that streams per-frame predictions from the built-in camera using Vision + CoreML.
+
+```dart
+import 'dart:io' show Platform;
+import 'dart:async';
+import 'package:emotion_detection/emotion_detection.dart';
+
+final ed = EmotionDetection();
+StreamSubscription? _sub;
+
+void startMacCamera() {
+  if (!Platform.isMacOS) return;
+  _sub = ed
+      .macCameraStream(modelId: 'mobilenetv1_fer2024-11-06-08-48-50')
+      .listen((dist) {
+    // dist is Map<String,double>
+    // e.g., {'Happiness': 0.72, 'Neutral': 0.20, ...}
+  });
+}
+
+void stopMacCamera() async { await _sub?.cancel(); _sub = null; }
+```
+
+Notes
+- Requires `NSCameraUsageDescription` and camera entitlement in sandboxed builds.
+- The stream begins on `listen` and stops when the subscription is canceled.
+- Default model is `mobilenetv1_fer2024-11-06-08-48-50` unless overridden.
 
 ---
 

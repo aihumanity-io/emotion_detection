@@ -4,12 +4,28 @@ import CoreML
 import CoreImage
 import ImageIO
 import Vision
+import AVFoundation
+import VideoToolbox
 import CryptoKit
 import Security
 import ZIPFoundation
 
 public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
   private var runtimeChannel: FlutterMethodChannel!
+  private var cameraEventChannel: FlutterEventChannel!
+  private var cameraEventSink: FlutterEventSink?
+
+  // Camera session state (macOS only)
+  private var captureSession: AVCaptureSession?
+  private var videoOutput: AVCaptureVideoDataOutput?
+  private let cameraQueue = DispatchQueue(label: "com.tartalabs.emotion.camera.queue")
+  private let ciContext = CIContext(options: nil)
+  private var isProcessingFrame = false
+  private var currentModelId: String = "mobilenetv1_fer2024-11-06-08-48-50"
+
+  // Preview window/layer for macOS camera
+  private var previewWindow: NSWindow?
+  private var previewLayer: AVCaptureVideoPreviewLayer?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     // Keep the existing public API channel.
@@ -21,6 +37,11 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
     let runtime = FlutterMethodChannel(name: "face_emotion_detection", binaryMessenger: registrar.messenger)
     instance.runtimeChannel = runtime
     registrar.addMethodCallDelegate(instance, channel: runtime)
+
+    // Camera prediction stream channel (macOS)
+    let stream = FlutterEventChannel(name: "face_emotion_detection/camera", binaryMessenger: registrar.messenger)
+    stream.setStreamHandler(instance)
+    instance.cameraEventChannel = stream
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -44,6 +65,13 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
     case "registerModel", "warmUp":
       // No-op for macOS; models are loaded lazily on first predict.
       result(true)
+    case "showMacCameraPreview":
+      if let args = call.arguments as? [String: Any], let mid = args["modelId"] as? String, !mid.isEmpty { currentModelId = mid }
+      showPreviewWindow()
+      result(nil)
+    case "hideMacCameraPreview":
+      hidePreviewWindow()
+      result(nil)
     case "unload":
       // Simple unload: drop cached model.
       if let args = call.arguments as? [String: Any], let modelId = args["modelId"] as? String {
@@ -53,6 +81,162 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
     default:
       result(FlutterMethodNotImplemented)
     }
+  }
+}
+
+// MARK: - Camera stream (EventChannel)
+
+extension EmotionDetectionPlugin: FlutterStreamHandler, AVCaptureVideoDataOutputSampleBufferDelegate {
+  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    cameraEventSink = events
+    if let args = arguments as? [String: Any], let mid = args["modelId"] as? String, !mid.isEmpty {
+      currentModelId = mid
+    }
+    startCameraSession()
+    return nil
+  }
+
+  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    stopCameraSession()
+    cameraEventSink = nil
+    return nil
+  }
+
+  private func startCameraSession() {
+    // Request permission if needed
+    let status = AVCaptureDevice.authorizationStatus(for: .video)
+    if status == .notDetermined {
+      AVCaptureDevice.requestAccess(for: .video) { granted in
+        DispatchQueue.main.async { if granted { self.configureAndStartSession() } else { self.cameraEventSink?([String: Double]()) } }
+      }
+      return
+    } else if status == .authorized {
+      configureAndStartSession()
+    } else {
+      cameraEventSink?([String: Double]())
+    }
+  }
+
+  private func configureAndStartSession() {
+    if captureSession != nil { return }
+    let session = AVCaptureSession()
+    session.beginConfiguration()
+    session.sessionPreset = .high
+    let selectedDevice: AVCaptureDevice?
+    if #available(macOS 14.0, *) {
+      let discovery = AVCaptureDevice.DiscoverySession(
+        deviceTypes: [.continuityCamera, .builtInWideAngleCamera, .externalUnknown],
+        mediaType: .video,
+        position: .unspecified
+      )
+      selectedDevice = discovery.devices.first
+    } else {
+      selectedDevice = AVCaptureDevice.default(for: .video)
+    }
+    guard let device = selectedDevice,
+          let input = try? AVCaptureDeviceInput(device: device),
+          session.canAddInput(input) else {
+      session.commitConfiguration(); return
+    }
+    session.addInput(input)
+
+    let output = AVCaptureVideoDataOutput()
+    output.alwaysDiscardsLateVideoFrames = true
+    output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+    if session.canAddOutput(output) {
+      session.addOutput(output)
+    }
+    output.setSampleBufferDelegate(self, queue: cameraQueue)
+    if let conn = output.connection(with: .video), conn.isVideoOrientationSupported {
+      conn.videoOrientation = .portrait
+    }
+    session.commitConfiguration()
+    captureSession = session
+    videoOutput = output
+    session.startRunning()
+  }
+
+  private func stopCameraSession() {
+    guard let session = captureSession else { return }
+    session.stopRunning()
+    videoOutput?.setSampleBufferDelegate(nil, queue: nil)
+    videoOutput = nil
+    captureSession = nil
+    isProcessingFrame = false
+    // Do not close preview window here; caller manages via hideMacCameraPreview.
+  }
+
+  public func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+    guard cameraEventSink != nil, !isProcessingFrame else { return }
+    isProcessingFrame = true
+    defer { isProcessingFrame = false }
+
+    guard let pb: CVPixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+    var cgImage: CGImage?
+    // Prefer VTCreateCGImageFromCVPixelBuffer for speed
+    if VTCreateCGImageFromCVPixelBuffer(pb, options: nil, imageOut: &cgImage) != kCVReturnSuccess || cgImage == nil {
+      let ci = CIImage(cvPixelBuffer: pb)
+      cgImage = ciContext.createCGImage(ci, from: ci.extent)
+    }
+    guard let img = cgImage else { return }
+
+    do {
+      // Detect/crop face
+      let faceRect = detectFace(in: img) ?? centerSquare(in: img)
+      guard let crop = img.cropping(to: faceRect) else { return }
+      guard let facePB = crop.pixelBuffer(width: 224, height: 224, orientation: .up) else { return }
+      let model = try ModelCache.shared.model(for: currentModelId)
+      let provider = try MLDictionaryFeatureProvider(dictionary: ["input_1": MLFeatureValue(pixelBuffer: facePB)])
+      let out = try model.prediction(from: provider)
+      guard let m = out.featureValue(for: "Identity")?.multiArrayValue else { return }
+      let scores = m.toFloatArray()
+      let labels = ["Anger","Disgust","Fear","Happiness","Neutral","Sadness","Surprise"]
+      var map: [String: Double] = [:]
+      for i in 0..<min(scores.count, labels.count) { map[labels[i]] = Double(scores[i]) }
+      cameraEventSink?(map)
+    } catch {
+      // Swallow per-frame errors; don't crash the stream
+    }
+  }
+
+  // MARK: - Preview window helpers
+  private func showPreviewWindow() {
+    if captureSession == nil { configureAndStartSession() }
+    guard let session = captureSession else { return }
+    if previewWindow == nil {
+      let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 540),
+                         styleMask: [.titled, .closable, .resizable],
+                         backing: .buffered,
+                         defer: false)
+      win.title = "Emotion Camera Preview"
+      let contentView = NSView(frame: win.contentLayoutRect)
+      contentView.wantsLayer = true
+      win.contentView = contentView
+      previewWindow = win
+    }
+    if previewLayer == nil {
+      let layer = AVCaptureVideoPreviewLayer(session: session)
+      layer.videoGravity = .resizeAspectFill
+      layer.frame = previewWindow?.contentView?.bounds ?? .zero
+      previewWindow?.contentView?.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
+      previewWindow?.contentView?.layer?.addSublayer(layer)
+      previewLayer = layer
+    } else {
+      previewLayer?.session = session
+    }
+    previewWindow?.makeKeyAndOrderFront(nil)
+    // Adjust layer on resize
+    NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: previewWindow, queue: .main) { [weak self] _ in
+      guard let self = self else { return }
+      self.previewLayer?.frame = self.previewWindow?.contentView?.bounds ?? .zero
+    }
+  }
+
+  private func hidePreviewWindow() {
+    previewLayer?.removeFromSuperlayer()
+    previewLayer = nil
+    previewWindow?.orderOut(nil)
+    previewWindow = nil
   }
 }
 
@@ -417,7 +601,34 @@ enum FileErr: Error { case missing, unzip, notFound, noMLPackage }
 struct FileIO {
   static func bundleURL(name: String, ext: String, in bundle: Bundle) throws -> URL { guard let url = bundle.url(forResource: name, withExtension: ext) else { throw FileErr.missing }; return url }
   static func tempDir(_ name: String = UUID().uuidString) throws -> URL { let d = FileManager.default.temporaryDirectory.appendingPathComponent(name, isDirectory: true); try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true); return d }
-  static func unzip(_ zipURL: URL, to dest: URL) throws { let fm = FileManager.default; try fm.createDirectory(at: dest, withIntermediateDirectories: true); guard let archive = Archive(url: zipURL, accessMode: .read) else { throw FileErr.unzip }; for entry in archive { if entry.path.hasPrefix("__MACOSX/") || entry.path.hasPrefix("._") { continue }; let outURL = dest.appendingPathComponent(entry.path); switch entry.type { case .directory: try fm.createDirectory(at: outURL, withIntermediateDirectories: true); case .file: try fm.createDirectory(at: outURL.deletingLastPathComponent(), withIntermediateDirectories: true); if fm.fileExists(atPath: outURL.path) { try fm.removeItem(at: outURL) }; fm.createFile(atPath: outURL.path, contents: nil); let handle = try FileHandle(forWritingTo: outURL); defer { try? handle.close() }; try archive.extract(entry, bufferSize: 32 * 1024, consumer: { data in try handle.write(contentsOf: data) }); default: continue } } }
+  static func unzip(_ zipURL: URL, to dest: URL) throws {
+    let fm = FileManager.default
+    try fm.createDirectory(at: dest, withIntermediateDirectories: true)
+    guard let archive = Archive(url: zipURL, accessMode: .read) else { throw FileErr.unzip }
+    for entry in archive {
+      if entry.path.hasPrefix("__MACOSX/") || entry.path.hasPrefix("._") { continue }
+      let outURL = dest.appendingPathComponent(entry.path)
+      switch entry.type {
+      case .directory:
+        try fm.createDirectory(at: outURL, withIntermediateDirectories: true)
+      case .file:
+        try fm.createDirectory(at: outURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if fm.fileExists(atPath: outURL.path) { try fm.removeItem(at: outURL) }
+        fm.createFile(atPath: outURL.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: outURL)
+        defer { try? handle.close() }
+        try archive.extract(entry, bufferSize: 32 * 1024, consumer: { data in
+          if #available(macOS 10.15.4, *) {
+            try handle.write(contentsOf: data)
+          } else {
+            handle.write(data)
+          }
+        })
+      default:
+        continue
+      }
+    }
+  }
   static func findMLPackage(in dir: URL) throws -> URL { if let e = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: [.isDirectoryKey]) { for case let u as URL in e where u.pathExtension == "mlpackage" { return u } } ; throw FileErr.noMLPackage }
 }
 enum EncryptedLoadError: Error { case integrityFailed }
@@ -452,14 +663,35 @@ extension MLMultiArray {
 
 // MARK: - CEK unwrap (UserCode gate + optional shard)
 
+// HKDF-SHA256 (RFC 5869) using CryptoKit HMAC; available on macOS 10.15+
+private func hkdfSHA256(ikm: Data, salt: Data, info: Data, outputLength: Int) -> Data {
+  let saltKey = SymmetricKey(data: salt.isEmpty ? Data(repeating: 0, count: 32) : salt)
+  let prkMac = HMAC<SHA256>.authenticationCode(for: ikm, using: saltKey)
+  let prk = SymmetricKey(data: Data(prkMac))
+  var okm = Data()
+  var previous = Data()
+  var counter: UInt8 = 1
+  while okm.count < outputLength {
+    var ctx = Data()
+    ctx.append(previous)
+    ctx.append(info)
+    ctx.append(counter)
+    let blockMac = HMAC<SHA256>.authenticationCode(for: ctx, using: prk)
+    let block = Data(blockMac)
+    okm.append(block)
+    previous = block
+    counter &+= 1
+  }
+  return okm.prefix(outputLength)
+}
+
 private func deriveKEK(user32: Data, shard: Data?, aad: String, kdfInfo: String) -> SymmetricKey {
   // Packaging binds shard via AAD/salt, not in IKM.
-  return HKDF<SHA256>.deriveKey(
-    inputKeyMaterial: SymmetricKey(data: user32),
-    salt: Data(aad.utf8),
-    info: Data(kdfInfo.utf8),
-    outputByteCount: 32
-  )
+  let ikm = user32
+  let salt = Data(aad.utf8)
+  let info = Data(kdfInfo.utf8)
+  let keyData = hkdfSHA256(ikm: ikm, salt: salt, info: info, outputLength: 32)
+  return SymmetricKey(data: keyData)
 }
 
 private func unwrapCEK_fromManifest(wrappedCEK_B64: String, kek: SymmetricKey, aad: String) throws -> Data {

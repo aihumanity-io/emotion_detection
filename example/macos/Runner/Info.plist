@@ -28,5 +28,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-</dict>
+  <key>NSCameraUsageDescription</key>
+  <string>Camera access is required for emotion detection.</string>
+  <key>NSCameraUseContinuityCameraDeviceType</key>
+  <true/>
+ </dict>
 </plist>

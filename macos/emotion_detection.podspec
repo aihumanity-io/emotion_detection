@@ -25,8 +25,8 @@ A new Flutter plugin project.
   s.dependency 'FlutterMacOS'
   s.dependency 'ZIPFoundation', '~> 0.9'
 
-  # CryptoKit and Vision require newer targets; align with modern macOS.
-  s.platform = :osx, '11.0'
+  # CryptoKit is available on macOS 10.15+. Use 10.15 to align with Flutter.
+  s.platform = :osx, '10.15'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.swift_version = '5.0'
 
