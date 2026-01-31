@@ -186,16 +186,47 @@ extension EmotionDetectionPlugin: FlutterStreamHandler, AVCaptureVideoDataOutput
       guard let crop = img.cropping(to: faceRect) else { return }
       guard let facePB = crop.pixelBuffer(width: 224, height: 224, orientation: .up) else { return }
       let model = try ModelCache.shared.model(for: currentModelId)
-      let provider = try MLDictionaryFeatureProvider(dictionary: ["input_1": MLFeatureValue(pixelBuffer: facePB)])
+      // Pick first image input name dynamically
+      let md = model.modelDescription
+      let inputName: String = {
+        for (name, desc) in md.inputDescriptionsByName { if desc.type == .image { return name } }
+        return "input_1"
+      }()
+      let provider = try MLDictionaryFeatureProvider(dictionary: [inputName: MLFeatureValue(pixelBuffer: facePB)])
       let out = try model.prediction(from: provider)
-      guard let m = out.featureValue(for: "Identity")?.multiArrayValue else { return }
-      let scores = m.toFloatArray()
-      let labels = ["Anger","Disgust","Fear","Happiness","Neutral","Sadness","Surprise"]
+
+      // Build probability map from available outputs
       var map: [String: Double] = [:]
-      for i in 0..<min(scores.count, labels.count) { map[labels[i]] = Double(scores[i]) }
-      cameraEventSink?(map)
+      // Prefer dictionary (class probabilities) if present
+      for name in out.featureNames {
+        if let fv = out.featureValue(for: name) {
+          if fv.type == .dictionary {
+            let dict = fv.dictionaryValue
+            for (k, v) in dict { if let ks = k as? String { map[ks] = v.doubleValue } }
+            if !map.isEmpty { break }
+          }
+        }
+      }
+      if map.isEmpty {
+        // Try multi-array fallback (e.g., 'Identity')
+        let maNames = ["Identity", "output", "probabilities"]
+        var arr: [Float]? = nil
+        for n in maNames {
+          if let m = out.featureValue(for: n)?.multiArrayValue { arr = m.toFloatArray(); break }
+        }
+        if arr == nil {
+          // pick first multiArray output if any
+          for name in out.featureNames { if let m = out.featureValue(for: name)?.multiArrayValue { arr = m.toFloatArray(); break } }
+        }
+        if let scores = arr {
+          let labels = ["Anger","Disgust","Fear","Happiness","Neutral","Sadness","Surprise"]
+          for i in 0..<min(scores.count, labels.count) { map[labels[i]] = Double(scores[i]) }
+        }
+      }
+      if !map.isEmpty { cameraEventSink?(map) }
     } catch {
-      // Swallow per-frame errors; don't crash the stream
+      // Log errors for visibility in debug runs
+      NSLog("EmotionDetectionPlugin capture error: \(error.localizedDescription)")
     }
   }
 

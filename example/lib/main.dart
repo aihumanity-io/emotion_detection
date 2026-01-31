@@ -453,6 +453,7 @@ class _MyAppState extends State<MyApp> {
           });
         }
       });
+      if (mounted) setState(() {}); // enable Stop button immediately
     } catch (e) {
       setState(() {
         _macResult = 'Camera error: $e';
@@ -464,6 +465,7 @@ class _MyAppState extends State<MyApp> {
     await _macCamSub?.cancel();
     try { await EmotionDetection().macHideCameraPreview(); } catch (_) {}
     _macCamSub = null;
+    if (mounted) setState(() {});
   }
 
   Widget _buildUserCodeWaiting() {
