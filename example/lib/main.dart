@@ -9,11 +9,16 @@ import 'package:emotion_detection/native/user_code_channel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:file_selector/file_selector.dart';
+import 'dart:typed_data';
 
 import 'sdk_secret_module.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Load optional .env for local SDK keys (macOS/desktop-friendly)
+  try { await dotenv.load(fileName: '.env'); } catch (_) {}
   // Guard camera warm-up on desktop/web to avoid MissingPluginException.
   if (Platform.isAndroid || Platform.isIOS) {
     try {
@@ -36,7 +41,7 @@ class _MyAppState extends State<MyApp> {
   String _platformVersion = 'Unknown';
   final _emotionDetectionPlugin = EmotionDetection();
   EmotionDetectorViewController controller = EmotionDetectorViewController();
-  final ExampleSdkSecretModule _sdkSecretModule = ExampleSdkSecretModule();
+  late final ExampleSdkSecretModule _sdkSecretModule;
   static const _methodChannelName = 'face_emotion_detection';
   String _cekSecretStatus = 'Not requested yet.';
   bool _fetchingCekSecret = false;
@@ -46,6 +51,7 @@ class _MyAppState extends State<MyApp> {
   String _modelInitStatus = 'Waiting for user code to initialize models.';
   static const bool _kOneTimeClearCaches = false;
   bool _didClearCaches = false;
+  String? _macResult;
 
   static Map<String, String> _modelAccountIds = {
     'aih_fer20250115': 'aih_fer20250115_v2025-01-15-shard',
@@ -67,6 +73,28 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    // Initialize secrets module from .env or process env if present
+    final env = dotenv.env;
+    final procEnv = Platform.environment;
+    final apiKeyId = (env['SDK_KEY_ID'] ?? procEnv['SDK_KEY_ID'] ?? '').trim();
+    final apiKeySecret = (env['SDK_KEY_SECRET'] ?? procEnv['SDK_KEY_SECRET'] ?? '').trim();
+    final baseUrl = (env['EXAMPLE_SERVER_BASE_URL'] ?? procEnv['EXAMPLE_SERVER_BASE_URL'] ?? '').trim();
+    final userName = (env['EXAMPLE_USER_NAME'] ?? procEnv['EXAMPLE_USER_NAME'] ?? '').trim();
+    final modelKey = (env['EXAMPLE_MODEL_KEY'] ?? procEnv['EXAMPLE_MODEL_KEY'] ?? '').trim();
+    final aad = (env['EXAMPLE_MODEL_AAD'] ?? procEnv['EXAMPLE_MODEL_AAD'] ?? '').trim();
+    final aadAndroid = (env['EXAMPLE_MODEL_AAD_ANDROID'] ?? procEnv['EXAMPLE_MODEL_AAD_ANDROID'] ?? '').trim();
+    final aadMac = (env['EXAMPLE_MODEL_AAD_MACOS'] ?? procEnv['EXAMPLE_MODEL_AAD_MACOS'] ?? '').trim();
+
+    _sdkSecretModule = ExampleSdkSecretModule(
+      apiKeyId: apiKeyId.isEmpty ? null : apiKeyId,
+      apiKeySecret: apiKeySecret.isEmpty ? null : apiKeySecret,
+      overrideBaseUrl: baseUrl.isEmpty ? null : baseUrl,
+      userName: userName.isEmpty ? null : userName,
+      modelKey: modelKey.isEmpty ? null : modelKey,
+      aad: aad.isEmpty ? null : aad,
+      macAad: aadMac.isEmpty ? null : aadMac,
+      androidAad: aadAndroid.isEmpty ? null : aadAndroid,
+    );
     if (Platform.isAndroid) {
       _modelAccountIds = {
         'mobilenetv1_fer2024-11-06-08-48-50':
@@ -198,7 +226,7 @@ class _MyAppState extends State<MyApp> {
     if (!_sdkSecretModule.hasRequiredConfig) {
       setState(() {
         _cekSecretStatus =
-            'Missing EXAMPLE_SDK_* dart-defines. Update run configs to call the endpoint.';
+            'Missing SDK_KEY_ID/SDK_KEY_SECRET. Provide via .env, environment, or --dart-define.';
       });
       return;
     }
@@ -260,7 +288,8 @@ class _MyAppState extends State<MyApp> {
               }
             }
             if (defaultTargetPlatform == TargetPlatform.iOS ||
-                defaultTargetPlatform == TargetPlatform.android) {
+                defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.macOS) {
               final shardB64 = _sdkSecretModule.extractShard(
                 res.payload,
                 modelKey: modelKey,
@@ -318,7 +347,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     final isMobile = Platform.isAndroid || Platform.isIOS;
     final body = !isMobile
-        ? _buildUnsupportedPlatform()
+        ? _buildMacDesktopDemo()
         : (!_userCodeReady
             ? _buildUserCodeWaiting()
             : (_modelsReady
@@ -334,22 +363,65 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  Widget _buildUnsupportedPlatform() {
+  Widget _buildMacDesktopDemo() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Text(
-              'Desktop camera preview not supported yet.\n'
-              'Run on iOS/Android to try EmotionDetectorView.',
+              _userCodeReady
+                  ? 'User code ready. Select an image to run the model.'
+                  : _cekSecretStatus,
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: _fetchingCekSecret ? null : _fetchCekSecret,
+                  child: Text(_fetchingCekSecret ? 'Requesting...' : 'Fetch secrets'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _userCodeReady ? _pickAndPredictOnMac : null,
+                  child: const Text('Select image'),
+                ),
+              ],
+            ),
+            if (_macResult != null) ...[
+              const SizedBox(height: 12),
+              Text('Result: $_macResult', textAlign: TextAlign.center),
+            ]
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _pickAndPredictOnMac() async {
+    try {
+      final typeGroup = const XTypeGroup(label: 'images', extensions: ['png', 'jpg', 'jpeg']);
+      final file = await openFile(acceptedTypeGroups: [typeGroup]);
+      if (file == null) return;
+      final Uint8List bytes = await file.readAsBytes();
+      _ensureModelRuntimeChannel();
+      final modelId = 'mobilenetv1_fer2024-11-06-08-48-50';
+      final out = await ModelRuntime.predict(modelId, { 'imageBytes': bytes });
+      if (out.isEmpty) {
+        setState(() { _macResult = 'No output'; });
+        return;
+      }
+      // Find top label
+      String best = '';
+      double bestV = -1.0;
+      out.forEach((k, v) { final d = (v is num) ? v.toDouble() : 0.0; if (d > bestV) { bestV = d; best = k; } });
+      setState(() { _macResult = '$best (${bestV.toStringAsFixed(3)})'; });
+    } catch (e) {
+      setState(() { _macResult = 'Error: $e'; });
+    }
   }
 
   Widget _buildUserCodeWaiting() {

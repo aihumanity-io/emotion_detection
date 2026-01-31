@@ -23,8 +23,13 @@ A new Flutter plugin project.
   # s.resource_bundles = {'emotion_detection_privacy' => ['Resources/PrivacyInfo.xcprivacy']}
 
   s.dependency 'FlutterMacOS'
+  s.dependency 'ZIPFoundation', '~> 0.9'
 
-  s.platform = :osx, '10.11'
+  # CryptoKit and Vision require newer targets; align with modern macOS.
+  s.platform = :osx, '11.0'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.swift_version = '5.0'
+
+  # Reuse encrypted model assets from the iOS directory.
+  s.resources = ['../ios/Assets/*.enc','../ios/Assets/*.json']
 end
