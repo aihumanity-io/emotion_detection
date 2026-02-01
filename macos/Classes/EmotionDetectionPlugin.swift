@@ -612,15 +612,30 @@ struct ModelManifest: Decodable {
 
 enum ManifestLoadError: Error { case notFound, readFailed, decodeFailed(Error) }
 func loadManifestJSON(fromBundle name: String, in bundle: Bundle = .main) throws -> ModelManifest {
+  // Try exact file name first (including extension if provided)
   if let url = bundle.url(forResource: name, withExtension: nil) { return try decodeManifest(at: url) }
   let ns = name as NSString
   let base = ns.deletingPathExtension
-  let ext  = ns.pathExtension
-  var candidates: [(String, String?)] = []
-  if ext == "manifest" { candidates.append((base, "manifest.json")) }
-  candidates += [("\(base)-shard", "manifest.json"), ("\(base)_shard", "manifest.json"), (name, "json"), (base, "manifest.json"), (base, "json"), (name, nil)]
+  let full = name
+  // Build robust candidates for both exact and split extensions
+  let candidates: [(String, String?)] = [
+    (full, nil),                 // e.g., base.manifest.json
+    (full, "json"),            // e.g., base.manifest.json (split ext)
+    (base + ".manifest", "json"),
+    (base, "manifest.json"),
+    (base, "json"),
+    (base, "manifest"),
+    (base + "-shard", "manifest.json"),
+    (base + "_shard", "manifest.json"),
+  ]
   let bundles: [Bundle] = [bundle] + Bundle.allBundles + Bundle.allFrameworks
-  for b in bundles { for (n,e) in candidates { if let u = b.url(forResource: n, withExtension: e) { return try decodeManifest(at: u) } } }
+  for b in bundles {
+    for (n, e) in candidates {
+      if let u = (e == nil ? b.url(forResource: n, withExtension: nil) : b.url(forResource: n, withExtension: e)) {
+        return try decodeManifest(at: u)
+      }
+    }
+  }
   throw ManifestLoadError.notFound
 }
 private func decodeManifest(at url: URL) throws -> ModelManifest { do { let d = try Data(contentsOf: url); return try JSONDecoder().decode(ModelManifest.self, from: d) } catch let err as DecodingError { throw ManifestLoadError.decodeFailed(err) } catch { throw ManifestLoadError.readFailed } }
@@ -632,6 +647,35 @@ enum FileErr: Error { case missing, unzip, notFound, noMLPackage }
 struct FileIO {
   static func bundleURL(name: String, ext: String, in bundle: Bundle) throws -> URL { guard let url = bundle.url(forResource: name, withExtension: ext) else { throw FileErr.missing }; return url }
   static func tempDir(_ name: String = UUID().uuidString) throws -> URL { let d = FileManager.default.temporaryDirectory.appendingPathComponent(name, isDirectory: true); try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true); return d }
+  static func anyBundleURL(name: String, ext: String, prefer bundle: Bundle? = nil) throws -> URL {
+    if let b = bundle, let u = b.url(forResource: name, withExtension: ext) { return u }
+    for b in [bundle].compactMap({ $0 }) + Bundle.allBundles + Bundle.allFrameworks {
+      if let u = b.url(forResource: name, withExtension: ext) { return u }
+    }
+    // Also scan resource bundles inside main bundle's Resources
+    if let resURL = Bundle.main.resourceURL {
+      if let it = FileManager.default.enumerator(at: resURL, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+        for case let url as URL in it {
+          if url.pathExtension == "bundle", let rb = Bundle(url: url), let u = rb.url(forResource: name, withExtension: ext) {
+            return u
+          }
+        }
+      }
+    }
+    // Finally, try Flutter assets packaged under App.framework/Resources/flutter_assets
+    let frameworks = Bundle.allFrameworks
+    for fw in frameworks {
+      if fw.bundleURL.lastPathComponent == "App.framework" || fw.bundleURL.path.contains("/App.framework") {
+        if let base = fw.resourceURL?.appendingPathComponent("flutter_assets", isDirectory: true) {
+          let file = ext.isEmpty ? name : "\(name).\(ext)"
+          let rel = "packages/emotion_detection/ios/Assets/\(file)"
+          let url = base.appendingPathComponent(rel)
+          if FileManager.default.fileExists(atPath: url.path) { return url }
+        }
+      }
+    }
+    throw FileErr.missing
+  }
   static func unzip(_ zipURL: URL, to dest: URL) throws {
     let fm = FileManager.default
     try fm.createDirectory(at: dest, withIntermediateDirectories: true)
@@ -665,8 +709,8 @@ struct FileIO {
 enum EncryptedLoadError: Error { case integrityFailed }
 struct EncryptedModelLoader {
   static func loadFromBundle(baseName: String, configuration: MLModelConfiguration, framework: Bundle, obtainKey: () throws -> SymmetricKey) throws -> MLModel {
-    let manifestURL = try FileIO.bundleURL(name: baseName, ext: "manifest.json", in: framework)
-    let encURL = try FileIO.bundleURL(name: baseName, ext: "enc", in: framework)
+    let manifestURL = try FileIO.anyBundleURL(name: baseName, ext: "manifest.json", prefer: framework)
+    let encURL = try FileIO.anyBundleURL(name: baseName, ext: "enc", prefer: framework)
     let manifest = try JSONDecoder().decode(ModelManifest.self, from: Data(contentsOf: manifestURL))
     let encData = try Data(contentsOf: encURL)
     let encHash = ModelCrypto.sha256Hex(encData)

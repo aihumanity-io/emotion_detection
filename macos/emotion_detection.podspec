@@ -30,6 +30,8 @@ A new Flutter plugin project.
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.swift_version = '5.0'
 
-  # Reuse encrypted model assets from the iOS directory.
-  s.resources = ['../ios/Assets/*.enc','../ios/Assets/*.json']
+  # Reuse encrypted model assets from the iOS directory via a dedicated bundle.
+  s.resource_bundles = {
+    'emotion_detection_models' => ['../ios/Assets/*']
+  }
 end
