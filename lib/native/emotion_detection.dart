@@ -70,11 +70,12 @@ class EmotionDetectionController {
         faceRect = faces[maxBoxIndex].boundingBox;
 
         faceImage = imagelib.copyCrop(
-            nv21Image,
-            faceRect!.left.toInt(),
-            faceRect!.top.toInt(),
-            faceRect!.width.toInt(),
-            faceRect!.height.toInt());
+          nv21Image,
+          x: faceRect!.left.toInt(),
+          y: faceRect!.top.toInt(),
+          width: faceRect!.width.toInt(),
+          height: faceRect!.height.toInt(),
+        );
         //faceImage = imagelib.flipHorizontal(faceImage!);
         //faceImage = imagelib.copyResize(faceImage!, width:48, height:48);
 
@@ -341,10 +342,10 @@ extension FaceExtension on Face {
 
     final face = imagelib.copyCrop(
       decodedImage!,
-      rectangle.topLeft.dx.toInt(),
-      rectangle.topLeft.dy.toInt(),
-      rectangle.width.toInt(),
-      rectangle.height.toInt(),
+      x: rectangle.topLeft.dx.toInt(),
+      y: rectangle.topLeft.dy.toInt(),
+      width: rectangle.width.toInt(),
+      height: rectangle.height.toInt(),
     );
 
     return Uint8List.fromList(imagelib.encodePng(face));

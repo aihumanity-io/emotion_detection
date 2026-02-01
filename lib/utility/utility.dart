@@ -6,7 +6,7 @@ imagelib.Image convertNV21(Uint8List imageArray, int width, int height) {
   Uint8List yuv420sp = imageArray; //image.planes[0].bytes;
 
   // Initial conversion from NV21 to RGB
-  final outImg = imagelib.Image(height, width); // Note the swapped dimensions
+  final outImg = imagelib.Image(width: height, height: width); // Note the swapped dimensions
   final int frameSize = width * height;
 
   for (int j = 0, yp = 0; j < height; j++) {
@@ -33,8 +33,14 @@ imagelib.Image convertNV21(Uint8List imageArray, int width, int height) {
         b = 0;
       } else if (b > 262143) b = 262143;
 
-      outImg.setPixelRgba(j, width - i - 1, ((r << 6) & 0xff0000) >> 16,
-          ((g >> 2) & 0xff00) >> 8, (b >> 10) & 0xff);
+      outImg.setPixelRgba(
+        j,
+        width - i - 1,
+        ((r << 6) & 0xff0000) >> 16,
+        ((g >> 2) & 0xff00) >> 8,
+        (b >> 10) & 0xff,
+        255,
+      );
     }
   }
   // Rotate the image by 90 degrees (or 270 degrees if needed)

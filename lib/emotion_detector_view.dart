@@ -213,11 +213,12 @@ class _FaceDetectorViewState extends State<EmotionDetectorView> {
       faceRect = face.boundingBox;
 
       final faceImage = imagelib.copyCrop(
-          nv21Image,
-          faceRect!.left.toInt(),
-          faceRect!.top.toInt(),
-          faceRect!.width.toInt(),
-          faceRect!.height.toInt());
+        nv21Image,
+        x: faceRect!.left.toInt(),
+        y: faceRect!.top.toInt(),
+        width: faceRect!.width.toInt(),
+        height: faceRect!.height.toInt(),
+      );
       faceImages.add(faceImage);
     }
     return faceImages;
@@ -234,11 +235,12 @@ class _FaceDetectorViewState extends State<EmotionDetectorView> {
       faceRect = faces[maxBoxIndex].boundingBox;
 
       final faceImage = imagelib.copyCrop(
-          nv21Image,
-          faceRect!.left.toInt(),
-          faceRect!.top.toInt(),
-          faceRect!.width.toInt(),
-          faceRect!.height.toInt());
+        nv21Image,
+        x: faceRect!.left.toInt(),
+        y: faceRect!.top.toInt(),
+        width: faceRect!.width.toInt(),
+        height: faceRect!.height.toInt(),
+      );
       return faceImage;
     }
     return null;
