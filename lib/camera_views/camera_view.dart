@@ -417,9 +417,20 @@ class _CameraViewState extends State<CameraView> {
   }
 
   Future _stopLiveFeed() async {
-    await _controller?.stopImageStream();
-    await _controller?.dispose();
-    _controller = null;
+    final c = _controller;
+    if (c != null) {
+      try {
+        if (c.value.isInitialized && c.value.isStreamingImages) {
+          await c.stopImageStream();
+        }
+      } catch (_) {
+        // swallow errors from stopping uninitialized or already-stopped streams
+      }
+      try {
+        await c.dispose();
+      } catch (_) {}
+      _controller = null;
+    }
   }
 
   Future _switchLiveCamera() async {
