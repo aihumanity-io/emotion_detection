@@ -56,7 +56,7 @@ class EmotionMobilenet: MLBase {
             print("Using bundle: \(fw.bundlePath)")
             
             let currentUserName = UserCodeUtils.sanitize(userName: userName)
-            let manifest: Manifest = try loadManifestJSON(fromBundle: "mobilenetv1_fer2024-11-06-08-48-50.manifest.manifest")
+            let manifest: Manifest = try loadManifestJSON(fromBundle: "mobilenetv1_fer.manifest")
             print("Manifest mobilenet: id=\(manifest.model_id ?? "nil") name=\(manifest.model_name ?? "nil") shard_required=\(manifest.shard_required ?? false)")
             let modelId = manifest.model_id ?? manifest.model_name
 
@@ -68,7 +68,7 @@ class EmotionMobilenet: MLBase {
             )
 
             let model = try EncryptedModelLoader.loadFromBundle(
-                baseName: "mobilenetv1_fer2024-11-06-08-48-50",
+                baseName: "mobilenetv1_fer",
                 configuration: modelConfig,
                 framework: fw
             ) { SymmetricKey(data: cekData) }

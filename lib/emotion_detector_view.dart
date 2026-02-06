@@ -193,8 +193,17 @@ class _FaceDetectorViewState extends State<EmotionDetectorView> {
     if (widget.onFaceImage != null) {
       widget.onFaceImage!(faceImages(inputImage, faces));
     }
-    if (widget.onEmotion != null) {
-      widget.onEmotion!(emotionMap as Map<String, double>);
+    if (widget.onEmotion != null && emotionMap != null) {
+      try {
+        final Map<String, double> dist = emotionMap.map((k, v) {
+          final key = k?.toString() ?? '';
+          final numVal = (v is num) ? v : 0.0;
+          return MapEntry(key, numVal.toDouble());
+        }).cast<String, double>();
+        widget.onEmotion!(dist);
+      } catch (_) {
+        // Fallback: ignore malformed map
+      }
     }
   }
 
