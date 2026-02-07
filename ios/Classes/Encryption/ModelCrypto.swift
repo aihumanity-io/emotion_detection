@@ -4,6 +4,12 @@ import CryptoKit
 enum CryptoError: Error { case badCiphertext }
 
 struct ModelCrypto {
+    static func decrypt(iv: Data, combinedCtTag: Data, key: SymmetricKey, aad: Data) throws -> Data {
+        let ct = combinedCtTag.prefix(combinedCtTag.count - 16)
+        let tag = combinedCtTag.suffix(16)
+        let box = try AES.GCM.SealedBox(nonce: try AES.GCM.Nonce(data: iv), ciphertext: ct, tag: tag)
+        return try AES.GCM.open(box, using: key, authenticating: aad)
+    }
     static func decrypt(combined: Data, key: SymmetricKey, aad: Data) throws -> Data {
         let box = try AES.GCM.SealedBox(combined: combined)
         return try AES.GCM.open(box, using: key, authenticating: aad)

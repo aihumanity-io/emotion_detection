@@ -177,9 +177,68 @@ func deriveKEK(user32: Data, shard: Data?, aad: String, kdfInfo: String) -> Symm
 }
 
 func unwrapCEK_fromManifest(wrappedCEK_B64: String, kek: SymmetricKey, aad: String) throws -> Data {
-    let env = Data(base64Encoded: wrappedCEK_B64.trimmingCharacters(in: .whitespacesAndNewlines))!
+    let trimmed = wrappedCEK_B64.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let env = Data(base64Encoded: trimmed) else {
+        throw UserGateError.manifestMissingFields
+    }
     let box = try AES.GCM.SealedBox(combined: env) // typo? fix: AES.GCM
     return try AES.GCM.open(box, using: kek, authenticating: Data(aad.utf8))
+}
+
+struct LicenseDoc: Decodable {
+    struct Wrap: Decodable { let type: String; let wrapIv: String; let salt: String; let shardUsed: Bool; let aad: String? }
+    let version: Int
+    let licenseId: String
+    let userId: String
+    let modelId: String
+    let algo: String
+    let plainSha256: String
+    let wrap: Wrap
+    let wrappedCek: String
+    let issuedAt: String
+    let expiresAt: String?
+}
+
+private func b64urlDecode(_ s: String) -> Data? {
+    let std = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+    let pad = (4 - std.count % 4) % 4
+    return Data(base64Encoded: std + String(repeating: "=", count: pad))
+}
+
+@available(iOS 14.0, *)
+func unwrapCEK_fromLicense(userCode: Data, shard: Data?, license: LicenseDoc) throws -> Data {
+    if license.wrap.shardUsed && shard == nil { throw UserGateError.missingShard }
+    let ikm: Data = {
+        if let s = shard {
+            var v = Data(userCode)
+            v.append(s)
+            return v
+        } else {
+            return userCode
+        }
+    }()
+    let salt = b64urlDecode(license.wrap.salt) ?? Data()
+    let info = Data("model:\(license.modelId)".utf8)
+    let kek = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: ikm), salt: salt, info: info, outputByteCount: 32)
+    let iv = try AES.GCM.Nonce(data: b64urlDecode(license.wrap.wrapIv) ?? Data())
+    let aad = Data((license.wrap.aad ?? "").utf8)
+    guard let combined = b64urlDecode(license.wrappedCek) else { throw UserGateError.manifestMissingFields }
+    let box = try AES.GCM.SealedBox(combined: combined)
+    let cek = try AES.GCM.open(box, using: kek, authenticating: aad)
+    precondition(cek.count == 32)
+    return cek
+}
+
+private func loadLicenseIfPresent(baseName: String, in bundle: Bundle = .main) -> LicenseDoc? {
+    let candidates = ["\(baseName).ios.license", "\(baseName).license", baseName]
+    for n in candidates {
+        if let url = bundle.url(forResource: n, withExtension: "json"),
+           let data = try? Data(contentsOf: url),
+           let lic = try? JSONDecoder().decode(LicenseDoc.self, from: data) {
+            return lic
+        }
+    }
+    return nil
 }
 struct Manifest: Decodable {
     let model_name: String?
@@ -370,6 +429,14 @@ func obtainCEK_UserCodeGateSync(
         user32 = fetched
     }
 
+    // Prefer license.json if present
+    if let lic = loadLicenseIfPresent(baseName: manifest.model_id ?? manifest.model_name ?? "") {
+        let shardLease = try resolveShardLease(from: manifest, userName: userName)
+        let useShard = lic.wrap.shardUsed
+        let shardData = useShard ? shardLease?.shard : nil
+        let cek = try unwrapCEK_fromLicense(userCode: user32, shard: shardData, license: lic)
+        return cek
+    }
     // If your Manifest fields are optionals, switch to guard lets
     let aad = manifest.aad
     let wrapped = manifest.wrapped_cek_b64

@@ -34,19 +34,52 @@ struct EncryptedModelLoader {
 
         // (Optional) quick enc file integrity check
         let encHash = ModelCrypto.sha256Hex(encData)
-        guard encHash == manifest.enc_sha256 else {
-            throw EncryptedLoadError.integrityFailed
+        if let encHex = manifest.enc_sha256 {
+            guard encHash == encHex else { throw EncryptedLoadError.integrityFailed }
         }
 
         // 2) Obtain CEK, decrypt to zip bytes with same AAD used at build time
         let key = try obtainKey()
         let aad = Data(manifest.aad.utf8)
-        let zipData = try ModelCrypto.decrypt(combined: encData, key: key, aad: aad)
+        
+        // New manifest style: separate IV + (ciphertext||tag)
+        if let ivB64u = manifest.gcmIv, !ivB64u.isEmpty, let ctLen = manifest.ciphertextLen {
+            func b64urlDecode(_ s: String) -> Data? {
+                let std = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+                let pad = (4 - std.count % 4) % 4
+                return Data(base64Encoded: std + String(repeating: "=", count: pad))
+            }
+            guard let iv = b64urlDecode(ivB64u) else { throw EncryptedLoadError.manifestMissing }
+            let zipData = try ModelCrypto.decrypt(iv: iv, combinedCtTag: encData, key: key, aad: aad)
+            // Replace enc_sha256/zip_sha256 checks with plainSha256 if present
+            if let plain = manifest.plainSha256, let plainHashData = Data(base64Encoded: plain.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + String(repeating: "=", count: (4 - plain.count % 4) % 4)) {
+                // optional: we will verify later after unzip; keep old flow for compatibility
+            }
+            // Continue with unzip using zipData
+            // (code below remains the same)
+        }
+        // Compute zipData compatible with both manifest styles
+        func b64urlDecode(_ s: String) -> Data? {
+            let std = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+            let pad = (4 - std.count % 4) % 4
+            return Data(base64Encoded: std + String(repeating: "=", count: pad))
+        }
+        let zipData: Data
+        if let ivB64u = manifest.gcmIv, !ivB64u.isEmpty, let iv = b64urlDecode(ivB64u) {
+            zipData = try ModelCrypto.decrypt(iv: iv, combinedCtTag: encData, key: key, aad: aad)
+        } else {
+            zipData = try ModelCrypto.decrypt(combined: encData, key: key, aad: aad)
+        }
+
 
         // 3) Verify zip hash matches manifest
         let zipHash = ModelCrypto.sha256Hex(zipData)
-        guard zipHash == manifest.zip_sha256 else {
-            throw EncryptedLoadError.integrityFailed
+        if let zipHex = manifest.zip_sha256 {
+            guard zipHash == zipHex else { throw EncryptedLoadError.integrityFailed }
+        } else if let plainB64u = manifest.plainSha256 {
+            func b64u(_ d: Data) -> String { return d.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") }
+            let calc = b64u(Data(SHA256.hash(data: zipData)))
+            guard calc == plainB64u else { throw EncryptedLoadError.integrityFailed }
         }
 
         // 4) Unzip → find .mlpackage → compile & load
