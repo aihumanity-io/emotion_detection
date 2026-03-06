@@ -1,4 +1,4 @@
-// No Flutter imports required here.
+import 'dart:convert';
 
 /// Model-specific secret info extracted from an API payload.
 class ModelSecret {
@@ -23,7 +23,8 @@ class CekSecretUtils {
 
   /// Extract the user code from a payload. If [modelKey] is supplied, prefers
   /// model-scoped entries under `modelSecrets` matching that key.
-  static String? extractUserCode(Map<String, dynamic> payload, {String? modelKey}) {
+  static String? extractUserCode(Map<String, dynamic> payload,
+      {String? modelKey}) {
     if (modelKey != null && modelKey.isNotEmpty) {
       final secrets = extractModelSecrets(payload);
       for (final secret in secrets) {
@@ -38,13 +39,15 @@ class CekSecretUtils {
 
   /// Extracts the preferred model key string from a payload.
   static String? extractModelKey(Map<String, dynamic> payload) {
-    final value = payload['modelKey'] ?? payload['model_id'] ?? payload['modelId'];
+    final value =
+        payload['modelKey'] ?? payload['model_id'] ?? payload['modelId'];
     return value is String && value.isNotEmpty ? value : null;
   }
 
   /// Extracts the base64-encoded shard for a model. If [modelKey] is supplied,
   /// prefers model-scoped entries under `modelSecrets`.
-  static String? extractShard(Map<String, dynamic> payload, {String? modelKey}) {
+  static String? extractShard(Map<String, dynamic> payload,
+      {String? modelKey}) {
     if (modelKey != null && modelKey.isNotEmpty) {
       final secrets = extractModelSecrets(payload);
       for (final secret in secrets) {
@@ -58,7 +61,8 @@ class CekSecretUtils {
 
   /// Extracts a best-effort expiry timestamp (ms since epoch). If [modelKey]
   /// is supplied, prefers model-scoped entries under `modelSecrets`.
-  static int? extractExpiresAtMs(Map<String, dynamic> payload, {String? modelKey}) {
+  static int? extractExpiresAtMs(Map<String, dynamic> payload,
+      {String? modelKey}) {
     if (modelKey != null && modelKey.isNotEmpty) {
       final secrets = extractModelSecrets(payload);
       for (final secret in secrets) {
@@ -68,6 +72,28 @@ class CekSecretUtils {
       }
     }
     return _extractExpiresAt(payload);
+  }
+
+  /// Extracts per-model license payload.
+  /// Accepts object forms (`license`, `licenseDoc`) or JSON string forms
+  /// (`licenseJson`, `license_json`).
+  static Map<String, dynamic>? extractLicense(Map<String, dynamic> payload,
+      {String? modelKey}) {
+    if (modelKey != null && modelKey.isNotEmpty) {
+      final list = payload['modelSecrets'];
+      if (list is List) {
+        for (final item in list) {
+          if (item is! Map) continue;
+          final asMap = Map<String, dynamic>.from(item);
+          final mk = _readModelKey(asMap);
+          if (mk == modelKey) {
+            final fromModel = _extractLicenseFrom(asMap);
+            if (fromModel != null) return fromModel;
+          }
+        }
+      }
+    }
+    return _extractLicenseFrom(payload);
   }
 
   /// Parses the `modelSecrets` array into typed entries.
@@ -180,5 +206,40 @@ class CekSecretUtils {
   static bool? _readShardRequired(Map<String, dynamic> map) {
     final value = map['shardRequired'] ?? map['shard_required'];
     return value is bool ? value : null;
+  }
+
+  static Map<String, dynamic>? _extractLicenseFrom(Map<String, dynamic> map) {
+    for (final key in const ['license', 'licenseDoc', 'license_doc']) {
+      final value = map[key];
+      if (value is Map<String, dynamic>) {
+        return value;
+      }
+      if (value is Map) {
+        return Map<String, dynamic>.from(value);
+      }
+    }
+    for (final key in const ['licenseJson', 'license_json']) {
+      final value = map[key];
+      if (value is String && value.isNotEmpty) {
+        final decoded = _decodeJsonMap(value);
+        if (decoded != null) return decoded;
+      }
+    }
+    return null;
+  }
+
+  static Map<String, dynamic>? _decodeJsonMap(String raw) {
+    try {
+      final obj = jsonDecode(raw);
+      if (obj is Map<String, dynamic>) {
+        return obj;
+      }
+      if (obj is Map) {
+        return Map<String, dynamic>.from(obj);
+      }
+    } catch (_) {
+      // no-op
+    }
+    return null;
   }
 }

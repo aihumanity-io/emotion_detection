@@ -121,6 +121,12 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         case "clearKeyShard":
             handleClearKeyShard(call: call, result: result)
 
+        case "setModelLicense":
+            handleSetModelLicense(call: call, result: result)
+
+        case "clearModelLicense":
+            handleClearModelLicense(call: call, result: result)
+
             
         default:
             result(FlutterMethodNotImplemented)
@@ -322,6 +328,44 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
             return
         }
         ShardCache.clearShard(modelId: modelId)
+        result(nil)
+    }
+
+    private func handleSetModelLicense(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let modelId = args["modelId"] as? String else {
+            result(FlutterError(code: "invalid_args", message: "modelId is required", details: nil))
+            return
+        }
+
+        do {
+            if let licenseMap = args["license"] as? [String: Any] {
+                try LicenseCache.setLicense(modelId: modelId, licenseMap: licenseMap)
+            } else if let licenseJson = args["licenseJson"] as? String {
+                guard let data = licenseJson.data(using: .utf8) else {
+                    result(FlutterError(code: "license_error", message: "licenseJson is not valid UTF-8", details: nil))
+                    return
+                }
+                try LicenseCache.setLicense(modelId: modelId, jsonData: data)
+            } else {
+                result(FlutterError(code: "invalid_args", message: "license or licenseJson is required", details: nil))
+                return
+            }
+            EmotionDetectionPlugin.resetModels()
+            result(nil)
+        } catch {
+            result(FlutterError(code: "license_error", message: error.localizedDescription, details: nil))
+        }
+    }
+
+    private func handleClearModelLicense(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let modelId = args["modelId"] as? String else {
+            result(FlutterError(code: "invalid_args", message: "modelId is required", details: nil))
+            return
+        }
+        LicenseCache.clear(modelId: modelId)
+        EmotionDetectionPlugin.resetModels()
         result(nil)
     }
 

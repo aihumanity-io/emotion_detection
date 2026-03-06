@@ -38,6 +38,18 @@ class ModelRuntime {
   static Future<void> clearKeyShard(String modelId) =>
       _ch.invokeMethod('clearKeyShard', {'modelId': modelId});
 
+  static Future<void> setModelLicense({
+    required String modelId,
+    required Map<String, dynamic> license,
+  }) =>
+      _ch.invokeMethod('setModelLicense', {
+        'modelId': modelId,
+        'license': license,
+      });
+
+  static Future<void> clearModelLicense(String modelId) =>
+      _ch.invokeMethod('clearModelLicense', {'modelId': modelId});
+
   static Future<bool> warmUp(String modelId) async =>
       (await _ch.invokeMethod('warmUp', {'modelId': modelId})) == true;
 
