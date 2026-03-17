@@ -91,6 +91,7 @@ class _CameraViewState extends State<CameraView> {
   double _currentExposureOffset = 0.0;
   bool _changingCameraLens = false;
   String? title;
+  String? _cameraError;
 
   @override
   void initState() {
@@ -102,18 +103,29 @@ class _CameraViewState extends State<CameraView> {
     _initialize();
   }
 
-  void _initialize() async {
-    if (_cameras.isEmpty) {
-      _cameras = await availableCameras();
-    }
-    for (var i = 0; i < _cameras.length; i++) {
-      if (_cameras[i].lensDirection == widget.initialCameraLensDirection) {
-        _cameraIndex = i;
-        break;
+  Future<void> _initialize() async {
+    try {
+      if (_cameras.isEmpty) {
+        _cameras = await availableCameras();
       }
-    }
-    if (_cameraIndex != -1) {
-      _startLiveFeed();
+      for (var i = 0; i < _cameras.length; i++) {
+        if (_cameras[i].lensDirection == widget.initialCameraLensDirection) {
+          _cameraIndex = i;
+          break;
+        }
+      }
+      if (_cameraIndex == -1 && _cameras.isNotEmpty) {
+        _cameraIndex = 0;
+      }
+      if (_cameraIndex == -1) {
+        _setCameraError('No camera available on this device.');
+        return;
+      }
+      await _startLiveFeed();
+    } on CameraException catch (error, stackTrace) {
+      _recordCameraException('availableCameras', error, stackTrace);
+    } catch (error) {
+      _setCameraError('Camera init failed: $error');
     }
   }
 
@@ -154,6 +166,7 @@ class _CameraViewState extends State<CameraView> {
   }
 
   Widget _liveFeedBody() {
+    if (_cameraError != null) return _cameraErrorBody(_cameraError!);
     if (_cameras.isEmpty) return Container();
     if (_controller == null) return Container();
     if (_controller?.value.isInitialized == false) return Container();
@@ -194,6 +207,22 @@ class _CameraViewState extends State<CameraView> {
                 ])),
           if (widget.showTakePhotoButton) _takePhotoButton(),
         ],
+      ),
+    );
+  }
+
+  Widget _cameraErrorBody(String message) {
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Text(
+            message,
+            style: const TextStyle(color: Colors.white),
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }
@@ -375,9 +404,9 @@ class _CameraViewState extends State<CameraView> {
         ),
       );
 
-  Future _startLiveFeed() async {
+  Future<void> _startLiveFeed() async {
     final camera = _cameras[_cameraIndex];
-    _controller = CameraController(
+    final controller = CameraController(
       camera,
       // Set to ResolutionPreset.high. Do NOT set it to ResolutionPreset.max because for some phones does NOT work.
       ResolutionPreset.high,
@@ -386,34 +415,35 @@ class _CameraViewState extends State<CameraView> {
           ? ImageFormatGroup.nv21
           : ImageFormatGroup.bgra8888,
     );
-    _controller?.initialize().then((_) {
+    _controller = controller;
+    try {
+      await controller.initialize();
       if (!mounted) {
         return;
       }
-      _controller?.getMinZoomLevel().then((value) {
-        _currentZoomLevel = value;
-        _minAvailableZoom = value;
-      });
-      _controller?.getMaxZoomLevel().then((value) {
-        _maxAvailableZoom = value;
-      });
+      _currentZoomLevel = await controller.getMinZoomLevel();
+      _minAvailableZoom = _currentZoomLevel;
+      _maxAvailableZoom = await controller.getMaxZoomLevel();
       _currentExposureOffset = 0.0;
-      _controller?.getMinExposureOffset().then((value) {
-        _minAvailableExposureOffset = value;
-      });
-      _controller?.getMaxExposureOffset().then((value) {
-        _maxAvailableExposureOffset = value;
-      });
-      _controller?.startImageStream(_processCameraImage).then((value) {
-        if (widget.onCameraFeedReady != null) {
-          widget.onCameraFeedReady!();
-        }
-        if (widget.onCameraLensDirectionChanged != null) {
-          widget.onCameraLensDirectionChanged!(camera.lensDirection);
-        }
-      });
+      _minAvailableExposureOffset = await controller.getMinExposureOffset();
+      _maxAvailableExposureOffset = await controller.getMaxExposureOffset();
+      await controller.startImageStream(_processCameraImage);
+      _cameraError = null;
+      if (widget.onCameraFeedReady != null) {
+        widget.onCameraFeedReady!();
+      }
+      if (widget.onCameraLensDirectionChanged != null) {
+        widget.onCameraLensDirectionChanged!(camera.lensDirection);
+      }
       setState(() {});
-    });
+    } on CameraException catch (error, stackTrace) {
+      await _stopLiveFeed();
+      _recordCameraException(
+        'startLiveFeed(${camera.lensDirection.name})',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   Future _stopLiveFeed() async {
@@ -434,12 +464,39 @@ class _CameraViewState extends State<CameraView> {
   }
 
   Future _switchLiveCamera() async {
+    if (_cameras.length <= 1) {
+      return;
+    }
     setState(() => _changingCameraLens = true);
     _cameraIndex = (_cameraIndex + 1) % _cameras.length;
 
     await _stopLiveFeed();
     await _startLiveFeed();
     setState(() => _changingCameraLens = false);
+  }
+
+  void _recordCameraException(
+    String phase,
+    CameraException error,
+    StackTrace stackTrace,
+  ) {
+    final description = error.description?.trim();
+    final message = description == null || description.isEmpty
+        ? 'Camera error (${error.code}) during $phase.'
+        : 'Camera error (${error.code}) during $phase: $description';
+    debugPrint(message);
+    debugPrintStack(stackTrace: stackTrace);
+    _setCameraError(message);
+  }
+
+  void _setCameraError(String message) {
+    if (!mounted) {
+      _cameraError = message;
+      return;
+    }
+    setState(() {
+      _cameraError = message;
+    });
   }
 
   void _processCameraImage(CameraImage image) {

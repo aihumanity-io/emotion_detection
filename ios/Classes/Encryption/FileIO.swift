@@ -16,12 +16,23 @@ private func frameworkBundle() -> Bundle {
 
 struct FileIO {
     static func bundleURL(name: String, ext: String, in bundle: Bundle) throws -> URL {
-            guard let url = bundle.url(forResource: name, withExtension: ext) else {
-                print("File: \(name).\(ext) not found in \(bundle.bundlePath)")
-                throw FileErr.missing
-            }
+        if let url = bundle.url(forResource: name, withExtension: ext) {
             return url
         }
+
+        let targetName = "\(name).\(ext)"
+        if let root = bundle.resourcePath,
+           let enumerator = FileManager.default.enumerator(atPath: root) {
+            while let rel = enumerator.nextObject() as? String {
+                if rel == targetName || rel.hasSuffix("/\(targetName)") {
+                    return URL(fileURLWithPath: root).appendingPathComponent(rel)
+                }
+            }
+        }
+
+        print("File: \(name).\(ext) not found in \(bundle.bundlePath)")
+        throw FileErr.missing
+    }
     
     static func bundleURL(name: String, ext: String) throws -> URL {
         guard let u = Bundle.main.url(forResource: name, withExtension: ext) else {

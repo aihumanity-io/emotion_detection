@@ -335,14 +335,54 @@ private func b64DecodeAny(_ value: String) -> Data? {
     return Data(base64Encoded: normalizeB64(value))
 }
 
+private func shortSHA256(_ data: Data, prefixBytes: Int = 6) -> String {
+    let digest = SHA256.hash(data: data)
+    return digest.prefix(prefixBytes).map { String(format: "%02x", $0) }.joined()
+}
+
 @available(iOS 14.0, *)
 func deriveKEK(user32: Data, shard: Data?, aad: String, kdfInfo: String) -> SymmetricKey {
+    var ikm = Data(user32)
+    if let shard, !shard.isEmpty {
+        ikm.append(shard)
+    }
     return HKDF<SHA256>.deriveKey(
-        inputKeyMaterial: SymmetricKey(data: user32),
+        inputKeyMaterial: SymmetricKey(data: ikm),
         salt: Data(aad.utf8),
         info: Data(kdfInfo.utf8),
         outputByteCount: 32
     )
+}
+
+private func legacyAadAuthCandidates(
+    manifestAad: String,
+    useShard: Bool,
+    shardB64Raw: String?
+) -> [String] {
+    var out: [String] = []
+    var seen = Set<String>()
+
+    func append(_ value: String) {
+        guard !value.isEmpty else { return }
+        guard seen.insert(value).inserted else { return }
+        out.append(value)
+    }
+
+    append(manifestAad)
+    guard useShard, let raw0 = shardB64Raw else { return out }
+    let raw = raw0.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !raw.isEmpty else { return out }
+
+    let normalized = normalizeB64(raw)
+    let normalizedNoPad = normalized.replacingOccurrences(of: "=", with: "")
+    let rawNoPad = raw.replacingOccurrences(of: "=", with: "")
+
+    append("\(manifestAad)|shard:\(raw)")
+    append("\(manifestAad)|shard:\(normalized)")
+    append("\(manifestAad)|shard:\(rawNoPad)")
+    append("\(manifestAad)|shard:\(normalizedNoPad)")
+
+    return out
 }
 
 private func unwrapLegacyManifestCEK(wrappedCEKB64: String, kek: SymmetricKey, aad: String) throws -> Data {
@@ -580,6 +620,39 @@ private func resolveCEK(manifest: Manifest, userName: String, effectiveModelId: 
         return try unwrapCEK_fromLicense(userCode: user32, shard: shardData, license: license)
 
     case .perDeveloper:
+        if let license = loadLicenseIfPresent(manifest: manifest, effectiveModelId: effectiveModelId, userName: userName) {
+            do {
+                let expectedIds = Set(
+                    [effectiveModelId, manifest.modelId, manifest.model_id, manifest.model_name]
+                        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                )
+                if !expectedIds.isEmpty && !expectedIds.contains(license.modelId) {
+                    throw UserGateError.invalidLicense
+                }
+                if let expectedHash = manifest.plainSha256, !expectedHash.isEmpty, license.plainSha256 != expectedHash {
+                    throw UserGateError.invalidLicense
+                }
+                if let algo = manifest.algo, !algo.isEmpty, license.algo != algo {
+                    throw UserGateError.invalidLicense
+                }
+                if let expRaw = license.expiresAt, !expRaw.isEmpty {
+                    guard let exp = parseISO8601(expRaw) else { throw UserGateError.invalidLicense }
+                    if exp <= Date() { throw UserGateError.licenseExpired }
+                }
+
+                let lease = try resolveShardLease(from: manifest, userName: userName, effectiveModelId: effectiveModelId)
+                let shardRequired = manifest.shardRequiredPolicy || license.wrap.shardUsed
+                if shardRequired && lease == nil { throw UserGateError.missingShard }
+                let shardData = license.wrap.shardUsed ? lease?.shard : nil
+                let cek = try unwrapCEK_fromLicense(userCode: user32, shard: shardData, license: license)
+                print("CEK license unwrap ok model=\(effectiveModelId) licenseModel=\(license.modelId) shardUsed=\(license.wrap.shardUsed)")
+                return cek
+            } catch {
+                print("CEK license unwrap failed for \(effectiveModelId); falling back to legacy manifest path: \(error)")
+            }
+        }
+
         if let wrapped = manifest.wrapped_cek_b64,
            let kdfInfo = manifest.kdf_info,
            !wrapped.isEmpty,
@@ -589,14 +662,59 @@ private func resolveCEK(manifest: Manifest, userName: String, effectiveModelId: 
             let useShard = manifest.shardRequiredPolicy
             let shardData = useShard ? lease?.shard : nil
             let shardB64 = lease?.shardB64 ?? lease?.shard.base64EncodedString()
-            let aadAuth: String
-            if useShard, let s = shardB64, !s.isEmpty {
-                aadAuth = "\(manifest.aad)|shard:\(s)"
-            } else {
-                aadAuth = manifest.aad
+
+            if useShard, shardData == nil {
+                throw UserGateError.missingShard
             }
-            let kek = deriveKEK(user32: user32, shard: shardData, aad: aadAuth, kdfInfo: kdfInfo)
-            return try unwrapLegacyManifestCEK(wrappedCEKB64: wrapped, kek: kek, aad: aadAuth)
+
+            let userHash = shortSHA256(user32)
+            let shardHash = shardData.map { shortSHA256($0) } ?? "none"
+            let wrappedHash = shortSHA256(Data(wrapped.utf8))
+            print("CEK legacy inputs model=\(effectiveModelId) user32=\(userHash) shard=\(shardHash) wrapped=\(wrappedHash) kdfInfo=\(kdfInfo)")
+
+            let aadCandidates = legacyAadAuthCandidates(
+                manifestAad: manifest.aad,
+                useShard: useShard,
+                shardB64Raw: shardB64
+            )
+
+            var keyInputs: [(label: String, shard: Data?)] = [("user32+aad", nil)]
+            if useShard, let shard = shardData {
+                keyInputs.append(("user32+shard+aad", shard))
+            }
+
+            var attempts: [String] = []
+            for (aadIdx, aadAuth) in aadCandidates.enumerated() {
+                for keyInput in keyInputs {
+                    do {
+                        let kek = deriveKEK(
+                            user32: user32,
+                            shard: keyInput.shard,
+                            aad: aadAuth,
+                            kdfInfo: kdfInfo
+                        )
+                        let cek = try unwrapLegacyManifestCEK(
+                            wrappedCEKB64: wrapped,
+                            kek: kek,
+                            aad: aadAuth
+                        )
+                        print("CEK legacy unwrap ok model=\(effectiveModelId) aadMode=\(aadAuth == manifest.aad ? "manifest" : "manifest+shard") keyMode=\(keyInput.label)")
+                        return cek
+                    } catch let err as NSError {
+                        attempts.append("aad=\(aadIdx) key=\(keyInput.label) err=\(err.domain)#\(err.code)")
+                    } catch {
+                        attempts.append("aad=\(aadIdx) key=\(keyInput.label) err=\(error)")
+                    }
+                }
+            }
+
+            throw NSError(
+                domain: "CEKAuth",
+                code: -5,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Legacy CEK unwrap failed for \(effectiveModelId). Tried \(attempts.joined(separator: " | "))"
+                ]
+            )
         }
 
         let lease = try resolveShardLease(from: manifest, userName: userName, effectiveModelId: effectiveModelId)
@@ -664,11 +782,13 @@ func obtainCEK_UserCodeGateSync(
     let user32: Data
     if let cached = try? User32Store.load(account: acct) {
         user32 = cached
+        print("User32 keychain hit account=\(acct) hash=\(shortSHA256(cached))")
     } else {
         let fetched = try user32Provider()
         guard fetched.count == 32 else { throw UserGateError.invalidUser32 }
         try User32Store.save(fetched, account: acct, requireBiometrics: false)
         user32 = fetched
+        print("User32 provider fetch account=\(acct) hash=\(shortSHA256(fetched))")
     }
 
     return try resolveCEK(manifest: manifest, userName: userName, effectiveModelId: effectiveModelId, user32: user32)

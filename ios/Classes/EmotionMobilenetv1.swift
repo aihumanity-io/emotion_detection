@@ -56,32 +56,50 @@ class EmotionMobilenet: MLBase {
             print("Using bundle: \(fw.bundlePath)")
             
             let currentUserName = UserCodeUtils.sanitize(userName: userName)
-            let manifest: Manifest = try loadManifestJSON(fromBundle: "mobilenetv1_fer.manifest")
-            print("Manifest mobilenet: id=\(manifest.model_id ?? "nil") name=\(manifest.model_name ?? "nil") shard_required=\(manifest.shard_required ?? false)")
-            let modelId = manifest.model_id ?? manifest.model_name
+            let baseCandidates = ["mobilenetv1_fer2024-11-06-08-48-50", "mobilenetv1_fer"]
+            var lastCandidateError: Error?
 
-            let cekData = try obtainCEK_UserCodeGateSync(
-                manifest: manifest,
-                userName: currentUserName,
-                modelId: modelId,
-                user32Provider: { try UserCodeUtils.loadUser32(userName: currentUserName, modelId: modelId) }
-            )
+            for baseName in baseCandidates {
+                do {
+                    let manifestURL = try FileIO.bundleURL(name: baseName, ext: "manifest.json", in: fw)
+                    let manifestData = try Data(contentsOf: manifestURL)
+                    let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
+                    let modelId = manifest.model_id ?? manifest.modelId ?? manifest.model_name
+                    print("Manifest \(baseName): id=\(manifest.model_id ?? manifest.modelId ?? "nil") name=\(manifest.model_name ?? "nil") shard_required=\(manifest.shard_required ?? false)")
 
-            let model = try EncryptedModelLoader.loadFromBundle(
-                baseName: "mobilenetv1_fer",
-                configuration: modelConfig,
-                framework: fw
-            ) { SymmetricKey(data: cekData) }
+                    let cekData = try obtainCEK_UserCodeGateSync(
+                        manifest: manifest,
+                        userName: currentUserName,
+                        modelId: modelId,
+                        user32Provider: { try UserCodeUtils.loadUser32(userName: currentUserName, modelId: modelId) }
+                    )
 
-            let typed = mobilenetv1_fer2024_11_06_08_48_50(model: model)
-            coreMLModel = typed
-            print("model mobilenetv1_fer2024-11-06-08-48-50 loaded")
+                    let model = try EncryptedModelLoader.loadFromBundle(
+                        baseName: baseName,
+                        configuration: modelConfig,
+                        framework: fw
+                    ) { SymmetricKey(data: cekData) }
+
+                    let typed = mobilenetv1_fer2024_11_06_08_48_50(model: model)
+                    coreMLModel = typed
+                    print("model \(baseName) loaded")
+                    lastCandidateError = nil
+                    break
+                } catch {
+                    lastCandidateError = error
+                    print("Mobilenet candidate \(baseName) failed: \(error.localizedDescription)")
+                }
+            }
+
+            if coreMLModel == nil {
+                throw lastCandidateError ?? MLError.Error("No compatible mobilenet artifact found.")
+            }
         }
         catch {
             let ns = error as NSError
             let log = Logger(subsystem: "com.creataai.emotionsdk", category: "model")
             log.logUnknown(ns, context: "mobilenetv1_fer2024 model loading")
-            throw MLError.Error("Failed to find model file.")
+            throw MLError.Error("mobilenet load failed (\(ns.domain)#\(ns.code)): \(ns.localizedDescription)")
         }
  
        

@@ -110,39 +110,45 @@ class AIHFerModel: MLBase {
             }
 
             let currentUserName = UserCodeUtils.sanitize(userName: userName)
-            let manifest: Manifest = try loadManifestJSON(fromBundle: "aih_fer.manifest")
-            print("Manifest aih_fer20250115: id=\(manifest.model_id ?? "nil") name=\(manifest.model_name ?? "nil") shard_required=\(manifest.shard_required ?? false)")
-            let modelId = manifest.model_id ?? manifest.model_name
+            let baseCandidates = ["aih_fer20250115", "aih_fer"]
+            var lastCandidateError: Error?
 
-            let cekData = try obtainCEK_UserCodeGateSync(
-                manifest: manifest,
-                userName: currentUserName,
-                modelId: modelId,
-                user32Provider: { try UserCodeUtils.loadUser32(userName: currentUserName, modelId: modelId) }
-            )
-            
-                // this is another way to load the model
-            // not used
-               /* let cekData = try SecureCEKProvider.obtainCEK(
-                    tag: "com.creataai.emotionsdk.aih_fer.kek.v1",   //DON'T CHANGE
-                    modelKeychainService: "com.creataai.emotionsdk.model.ceks", //DON"T change
-                    modelAccount: "aih_fer20250115_v2025-01-15",               //don't change
-                    bootstrapCEKBase64: ""
-                    // serverFetcher: { pubX963 in ... } // when you wire your backend
-                )*/
+            for baseName in baseCandidates {
+                do {
+                    let manifestURL = try FileIO.bundleURL(name: baseName, ext: "manifest.json", in: fw)
+                    let manifestData = try Data(contentsOf: manifestURL)
+                    let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
+                    let modelId = manifest.model_id ?? manifest.modelId ?? manifest.model_name
+                    print("Manifest \(baseName): id=\(manifest.model_id ?? manifest.modelId ?? "nil") name=\(manifest.model_name ?? "nil") shard_required=\(manifest.shard_required ?? false)")
 
-                let model = try EncryptedModelLoader.loadFromBundle(
-                    baseName: "aih_fer",
-                    configuration: modelConfig,
-                    framework: fw
-                    
-                 ){
-                    SymmetricKey(data: cekData)
+                    let cekData = try obtainCEK_UserCodeGateSync(
+                        manifest: manifest,
+                        userName: currentUserName,
+                        modelId: modelId,
+                        user32Provider: { try UserCodeUtils.loadUser32(userName: currentUserName, modelId: modelId) }
+                    )
+
+                    let model = try EncryptedModelLoader.loadFromBundle(
+                        baseName: baseName,
+                        configuration: modelConfig,
+                        framework: fw
+                    ) {
+                        SymmetricKey(data: cekData)
+                    }
+                    let typed = aih_fer20250115(model: model)
+                    coreMLModel = typed
+                    print("model \(baseName) loaded")
+                    lastCandidateError = nil
+                    break
+                } catch {
+                    lastCandidateError = error
+                    print("AIH candidate \(baseName) failed: \(error.localizedDescription)")
                 }
-                let typed = aih_fer20250115(model: model)   // or aih_fer20250115(contentsOf: compiledURL, configuration: cfg)
-            
-            coreMLModel = typed
-            print("model aih_fer v1 loaded")
+            }
+
+            if coreMLModel == nil {
+                throw lastCandidateError ?? MLError.Error("No compatible AIH model artifact found.")
+            }
             //coreMLModel = try aih_fer20250115(configuration: modelConfig) // model358(configuration: myModelConfig)
             //coreMLModel = try MLModel(contentsOf: modelURL, configuration: modelConfig)
 
@@ -151,7 +157,7 @@ class AIHFerModel: MLBase {
             let ns = error as NSError
             let log = Logger(subsystem: "com.creataai.emotionsdk", category: "model")
             log.logUnknown(ns, context: "aih_fer model loading")
-            throw MLError.Error("Failed to find model file.")
+            throw MLError.Error("aih_fer load failed (\(ns.domain)#\(ns.code)): \(ns.localizedDescription)")
         }
     }
 

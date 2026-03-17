@@ -18,7 +18,9 @@ import 'sdk_secret_module.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Load optional .env for local SDK keys (macOS/desktop-friendly)
-  try { await dotenv.load(fileName: '.env'); } catch (_) {}
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {}
   // Guard camera warm-up on desktop/web to avoid MissingPluginException.
   if (Platform.isAndroid || Platform.isIOS) {
     try {
@@ -49,19 +51,44 @@ class _MyAppState extends State<MyApp> {
   bool _modelsReady = false;
   bool _initializingModels = false;
   String _modelInitStatus = 'Waiting for user code to initialize models.';
-  static const bool _kOneTimeClearCaches = false;
+  static const bool _kOneTimeClearCaches = true;
   bool _didClearCaches = false;
   String? _macResult;
   StreamSubscription<Map<String, double>>? _macCamSub;
 
   static Map<String, String> _modelAccountIds = {
-    'aih_fer20250115': 'aih_fer20250115_v2025-01-15-shard',
+    'aih_fer': 'aih_fer_v2025-01-15-shard',
+    'aih_fer20250115': 'aih_fer_v2025-01-15-shard',
+    'mobilenetv1_fer': 'mobilenetv1_fer_v2024-11-06-08-48-50-shard',
     'mobilenetv1_fer2024-11-06-08-48-50':
-        'mobilenetv1_fer2024-11-06-08-48-50_v2025-01-15-shard',
+        'mobilenetv1_fer_v2024-11-06-08-48-50-shard',
   };
 
-  String _accountModelId(String modelKey) =>
-      _modelAccountIds[modelKey] ?? modelKey;
+  String? _deriveModelShardAlias(String modelKey) {
+    final isoMatch = RegExp(r'^(.+?)(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})$')
+        .firstMatch(modelKey);
+    if (isoMatch != null) {
+      final prefix = isoMatch.group(1);
+      final ts = isoMatch.group(2);
+      if (prefix != null && ts != null) {
+        return '${prefix}_v$ts-shard';
+      }
+    }
+
+    final compactDateMatch = RegExp(r'^(.+?)(\d{8})$').firstMatch(modelKey);
+    if (compactDateMatch != null) {
+      final prefix = compactDateMatch.group(1);
+      final yyyymmdd = compactDateMatch.group(2);
+      if (prefix != null && yyyymmdd != null) {
+        final yyyy = yyyymmdd.substring(0, 4);
+        final mm = yyyymmdd.substring(4, 6);
+        final dd = yyyymmdd.substring(6, 8);
+        return '${prefix}_v$yyyy-$mm-$dd-shard';
+      }
+    }
+
+    return null;
+  }
 
   Iterable<String> _allModelIds(String modelKey) sync* {
     yield modelKey;
@@ -69,6 +96,18 @@ class _MyAppState extends State<MyApp> {
     if (mapped != null && mapped.isNotEmpty && mapped != modelKey) {
       yield mapped;
     }
+    final derived = _deriveModelShardAlias(modelKey);
+    if (derived != null && derived.isNotEmpty && derived != modelKey) {
+      yield derived;
+    }
+  }
+
+  String _runtimeModelIdForKey(String modelKey) {
+    final mapped = _modelAccountIds[modelKey];
+    if (mapped != null && mapped.isNotEmpty) return mapped;
+    final derived = _deriveModelShardAlias(modelKey);
+    if (derived != null && derived.isNotEmpty) return derived;
+    return modelKey;
   }
 
   @override
@@ -78,13 +117,22 @@ class _MyAppState extends State<MyApp> {
     final env = dotenv.env;
     final procEnv = Platform.environment;
     final apiKeyId = (env['SDK_KEY_ID'] ?? procEnv['SDK_KEY_ID'] ?? '').trim();
-    final apiKeySecret = (env['SDK_KEY_SECRET'] ?? procEnv['SDK_KEY_SECRET'] ?? '').trim();
-    final baseUrl = (env['EXAMPLE_SERVER_BASE_URL'] ?? procEnv['EXAMPLE_SERVER_BASE_URL'] ?? '').trim();
-    final userName = (env['EXAMPLE_USER_NAME'] ?? procEnv['EXAMPLE_USER_NAME'] ?? '').trim();
-    final modelKey = (env['EXAMPLE_MODEL_KEY'] ?? procEnv['EXAMPLE_MODEL_KEY'] ?? '').trim();
-    final aad = (env['EXAMPLE_MODEL_AAD'] ?? procEnv['EXAMPLE_MODEL_AAD'] ?? '').trim();
-    final aadAndroid = (env['EXAMPLE_MODEL_AAD_ANDROID'] ?? procEnv['EXAMPLE_MODEL_AAD_ANDROID'] ?? '').trim();
-    final aadMac = (env['EXAMPLE_MODEL_AAD_MACOS'] ?? procEnv['EXAMPLE_MODEL_AAD_MACOS'] ?? '').trim();
+    final apiKeySecret =
+        (env['SDK_KEY_SECRET'] ?? procEnv['SDK_KEY_SECRET'] ?? '').trim();
+    final baseUrl = (env['EXAMPLE_SERVER_BASE_URL'] ??
+            procEnv['EXAMPLE_SERVER_BASE_URL'] ??
+            '')
+        .trim();
+    final userName =
+        (env['EXAMPLE_USER_NAME'] ?? procEnv['EXAMPLE_USER_NAME'] ?? '').trim();
+    final modelKey =
+        (env['EXAMPLE_MODEL_KEY'] ?? procEnv['EXAMPLE_MODEL_KEY'] ?? '').trim();
+    final aad =
+        (env['EXAMPLE_MODEL_AAD'] ?? procEnv['EXAMPLE_MODEL_AAD'] ?? '').trim();
+    final aadAndroid = (env['EXAMPLE_MODEL_AAD_ANDROID'] ??
+            procEnv['EXAMPLE_MODEL_AAD_ANDROID'] ??
+            '')
+        .trim();
 
     _sdkSecretModule = ExampleSdkSecretModule(
       apiKeyId: apiKeyId.isEmpty ? null : apiKeyId,
@@ -93,7 +141,6 @@ class _MyAppState extends State<MyApp> {
       userName: userName.isEmpty ? null : userName,
       modelKey: modelKey.isEmpty ? null : modelKey,
       aad: aad.isEmpty ? null : aad,
-      macAad: aadMac.isEmpty ? null : aadMac,
       androidAad: aadAndroid.isEmpty ? null : aadAndroid,
     );
     if (Platform.isAndroid) {
@@ -153,7 +200,7 @@ class _MyAppState extends State<MyApp> {
           .modelKeysForPlatform(defaultTargetPlatform)
           .where((key) {
             if (defaultTargetPlatform == TargetPlatform.android &&
-                key == 'aih_fer20250115') {
+                (key == 'aih_fer20250115' || key == 'aih_fer')) {
               return false;
             }
             return true;
@@ -199,19 +246,25 @@ class _MyAppState extends State<MyApp> {
     _didClearCaches = true;
     _ensureModelRuntimeChannel();
     for (final modelKey in _sdkSecretModule.modelKeys) {
-      final accountId = _accountModelId(modelKey);
-      try {
-        await UserCodeChannel.clearUserCode(
-          _sdkSecretModule.userName,
-          modelId: accountId,
-        );
-      } catch (error) {
-        debugPrint('Clear user code failed for $modelKey: $error');
-      }
-      try {
-        await ModelRuntime.clearKeyShard(modelKey);
-      } catch (error) {
-        debugPrint('Clear shard failed for $modelKey: $error');
+      for (final id in _allModelIds(modelKey)) {
+        try {
+          await UserCodeChannel.clearUserCode(
+            _sdkSecretModule.userName,
+            modelId: id,
+          );
+        } catch (error) {
+          debugPrint('Clear user code failed for $id: $error');
+        }
+        try {
+          await ModelRuntime.clearKeyShard(id);
+        } catch (error) {
+          debugPrint('Clear shard failed for $id: $error');
+        }
+        try {
+          await ModelRuntime.clearModelLicense(id);
+        } catch (error) {
+          debugPrint('Clear license failed for $id: $error');
+        }
       }
     }
     try {
@@ -255,6 +308,7 @@ class _MyAppState extends State<MyApp> {
 
       int storedUserCodes = 0;
       int shardCount = 0;
+      int licenseCount = 0;
 
       if (!_sdkSecretModule.hasUserName) {
         status = 'Missing EXAMPLE_USER_NAME to save user code.';
@@ -265,27 +319,42 @@ class _MyAppState extends State<MyApp> {
           for (final res in results) {
             final modelKey = res.modelKey;
             if (defaultTargetPlatform == TargetPlatform.android &&
-                modelKey == 'aih_fer20250115') {
+                (modelKey == 'aih_fer20250115' || modelKey == 'aih_fer')) {
               // skip models not supported on Android yet
               continue;
             }
-            final accountId = _accountModelId(modelKey);
+            final modelAliases = <String>{
+              ..._allModelIds(modelKey),
+            };
+            final payloadModelId =
+                (res.payload['modelId'] ?? res.payload['model_id']) as String?;
+            if (payloadModelId != null && payloadModelId.trim().isNotEmpty) {
+              modelAliases.add(payloadModelId.trim());
+            }
+            final license = _sdkSecretModule.extractLicense(res.payload,
+                modelKey: modelKey);
+            final licenseModelId = license?['modelId'] as String?;
+            if (licenseModelId != null && licenseModelId.trim().isNotEmpty) {
+              modelAliases.add(licenseModelId.trim());
+            }
             final userCodeB64 = _sdkSecretModule.extractUserCode(res.payload,
                 modelKey: modelKey);
             if (userCodeB64 != null) {
-              try {
-                if (kDebugMode) {
-                  debugPrint(
-                      'Storing user code for $modelKey len=${userCodeB64.length} b64prefix=${userCodeB64.substring(0, math.min(8, userCodeB64.length))}');
+              for (final modelAlias in modelAliases) {
+                try {
+                  if (kDebugMode) {
+                    debugPrint(
+                        'Storing user code for $modelAlias len=${userCodeB64.length} b64prefix=${userCodeB64.substring(0, math.min(8, userCodeB64.length))}');
+                  }
+                  await UserCodeChannel.saveUserCode(
+                    userName: _sdkSecretModule.userName,
+                    userCodeB64: userCodeB64,
+                    modelId: modelAlias,
+                  );
+                  storedUserCodes++;
+                } catch (error) {
+                  debugPrint('saveUserCode failed for $modelAlias: $error');
                 }
-                await UserCodeChannel.saveUserCode(
-                  userName: _sdkSecretModule.userName,
-                  userCodeB64: userCodeB64,
-                  modelId: accountId,
-                );
-                storedUserCodes++;
-              } catch (error) {
-                debugPrint('saveUserCode failed for $modelKey: $error');
               }
             }
             if (defaultTargetPlatform == TargetPlatform.iOS ||
@@ -305,7 +374,7 @@ class _MyAppState extends State<MyApp> {
                     debugPrint(
                         'Storing shard for $modelKey len=${shardB64.length} b64prefix=${shardB64.substring(0, math.min(8, shardB64.length))} exp=$expiresAtMs');
                   }
-                  for (final id in _allModelIds(modelKey)) {
+                  for (final id in modelAliases) {
                     await ModelRuntime.setKeyShard(
                       modelId: id,
                       keyShardB64: shardB64,
@@ -319,6 +388,19 @@ class _MyAppState extends State<MyApp> {
                 }
               }
             }
+            if (license != null && license.isNotEmpty) {
+              for (final id in modelAliases) {
+                try {
+                  await ModelRuntime.setModelLicense(
+                    modelId: id,
+                    license: license,
+                  );
+                  licenseCount++;
+                } catch (error) {
+                  debugPrint('setModelLicense failed for $id: $error');
+                }
+              }
+            }
           }
 
           _userCodeReady = storedUserCodes > 0;
@@ -326,8 +408,8 @@ class _MyAppState extends State<MyApp> {
             status = 'Responses missing userCodeB64 field.';
           } else {
             status = shardCount > 0
-                ? 'User codes stored ($storedUserCodes); shards stored ($shardCount/${results.length})'
-                : 'User codes stored ($storedUserCodes); no shards in responses.';
+                ? 'User codes stored ($storedUserCodes); shards stored ($shardCount/${results.length}); licenses stored ($licenseCount)'
+                : 'User codes stored ($storedUserCodes); no shards in responses; licenses stored ($licenseCount)';
             await _initializeModelsIfReady();
           }
         } catch (error) {
@@ -387,7 +469,9 @@ class _MyAppState extends State<MyApp> {
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
-                  onPressed: _userCodeReady && _macCamSub == null ? _startMacCamera : null,
+                  onPressed: _userCodeReady && _macCamSub == null
+                      ? _startMacCamera
+                      : null,
                   child: const Text('Start camera'),
                 ),
                 const SizedBox(width: 8),
@@ -409,31 +493,44 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _pickAndPredictOnMac() async {
     try {
-      final typeGroup = const XTypeGroup(label: 'images', extensions: ['png', 'jpg', 'jpeg']);
+      final typeGroup =
+          const XTypeGroup(label: 'images', extensions: ['png', 'jpg', 'jpeg']);
       final file = await openFile(acceptedTypeGroups: [typeGroup]);
       if (file == null) return;
       final Uint8List bytes = await file.readAsBytes();
       _ensureModelRuntimeChannel();
-      final modelId = 'mobilenetv1_fer2024-11-06-08-48-50';
-      final out = await ModelRuntime.predict(modelId, { 'imageBytes': bytes });
+      final modelId = _runtimeModelIdForKey('mobilenetv1_fer');
+      final out = await ModelRuntime.predict(modelId, {'imageBytes': bytes});
       if (out.isEmpty) {
-        setState(() { _macResult = 'No output'; });
+        setState(() {
+          _macResult = 'No output';
+        });
         return;
       }
       // Find top label
       String best = '';
       double bestV = -1.0;
-      out.forEach((k, v) { final d = (v is num) ? v.toDouble() : 0.0; if (d > bestV) { bestV = d; best = k; } });
-      setState(() { _macResult = '$best (${bestV.toStringAsFixed(3)})'; });
+      out.forEach((k, v) {
+        final d = (v is num) ? v.toDouble() : 0.0;
+        if (d > bestV) {
+          bestV = d;
+          best = k;
+        }
+      });
+      setState(() {
+        _macResult = '$best (${bestV.toStringAsFixed(3)})';
+      });
     } catch (e) {
-      setState(() { _macResult = 'Error: $e'; });
+      setState(() {
+        _macResult = 'Error: $e';
+      });
     }
   }
 
   void _startMacCamera() {
     try {
       final ed = EmotionDetection();
-      final modelId = 'mobilenetv1_fer2024-11-06-08-48-50';
+      final modelId = _runtimeModelIdForKey('mobilenetv1_fer');
       ed.macShowCameraPreview(modelId: modelId);
       _macCamSub = ed.macCameraStream(modelId: modelId).listen((dist) {
         String best = '';
@@ -463,7 +560,9 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _stopMacCamera() async {
     await _macCamSub?.cancel();
-    try { await EmotionDetection().macHideCameraPreview(); } catch (_) {}
+    try {
+      await EmotionDetection().macHideCameraPreview();
+    } catch (_) {}
     _macCamSub = null;
     if (mounted) setState(() {});
   }

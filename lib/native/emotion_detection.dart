@@ -18,13 +18,6 @@ class EmotionDetectionController {
       MethodChannel(method_channel_name);
   static ModelRuntime modelLoader = ModelRuntime(method_channel_name);
 
-  final FaceDetector _faceDetector = FaceDetector(
-    options: FaceDetectorOptions(
-      enableContours: true,
-      enableLandmarks: true,
-    ),
-  );
-
   Rect? faceRect;
   imagelib.Image? faceImage;
   List<int> history = [];
@@ -58,7 +51,6 @@ class EmotionDetectionController {
   /// [orientation] The orientation of the image
   Future<Map?> processImage(InputImage image, faces) async {
     try {
-      //final faces = await _faceDetector.processImage(image);
       if (faces.isNotEmpty) {
         //faceData = await emotionDetectionController.processImage(inputImage.bytes!, inputImage.metadata!.size);
         final nv21Image = convertNV21(

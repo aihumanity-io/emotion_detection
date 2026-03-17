@@ -24,10 +24,6 @@ const String _exampleAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD',
   defaultValue: 'com.creataai.emotionsdk/ios',
 );
-const String _exampleMacOSAad = String.fromEnvironment(
-  'EXAMPLE_MODEL_AAD_MACOS',
-  defaultValue: 'com.creataai.emotionsdk/ios',
-);
 const String _exampleAndroidAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD_ANDROID',
   defaultValue: 'com.creataai.emotionsdk/android',
@@ -57,14 +53,12 @@ class ExampleSdkSecretModule {
     String? modelKey,
     List<String>? modelKeys,
     String? aad,
-    String? macAad,
     String? androidAad,
     String? overrideBaseUrl,
     String? userName,
   })  : _apiKeyId = apiKeyId ?? _exampleSdkKeyId,
         _apiKeySecret = apiKeySecret ?? _exampleSdkKeySecret,
         _aad = aad ?? _exampleAad,
-        _macAad = macAad ?? _exampleMacOSAad,
         _androidAad = androidAad ?? _exampleAndroidAad,
         _overrideBaseUrl = overrideBaseUrl ?? _exampleOverrideBase,
         _userName = userName ?? _exampleUserName,
@@ -81,7 +75,6 @@ class ExampleSdkSecretModule {
   final String _modelKey;
   final List<String> _modelKeys;
   final String _aad;
-  final String _macAad;
   final String _androidAad;
   final String _overrideBaseUrl;
   final String _userName;
@@ -143,10 +136,7 @@ class ExampleSdkSecretModule {
     if (platform == TargetPlatform.android) {
       return _androidAad;
     }
-    if (platform == TargetPlatform.macOS) {
-      return _macAad;
-    }
-    return _aad; // iOS and others
+    return _aad; // iOS + macOS + others
   }
 
   /// Returns the AAD to request based on platform; callers should surface 403
@@ -172,10 +162,16 @@ class ExampleSdkSecretModule {
     return CekSecretUtils.extractExpiresAtMs(payload, modelKey: modelKey);
   }
 
+  Map<String, dynamic>? extractLicense(Map<String, dynamic> payload,
+      {String? modelKey}) {
+    return CekSecretUtils.extractLicense(payload, modelKey: modelKey);
+  }
+
   /// Parse the `modelSecrets` array into typed entries.
   List<ModelSecret> extractModelSecrets(Map<String, dynamic> payload) {
     return CekSecretUtils.extractModelSecrets(payload);
   }
 
-  String normalizeShard(String shardB64) => CekSecretUtils.normalizeBase64(shardB64);
+  String normalizeShard(String shardB64) =>
+      CekSecretUtils.normalizeBase64(shardB64);
 }

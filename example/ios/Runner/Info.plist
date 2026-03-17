@@ -30,6 +30,8 @@
 	<string>This app uses camera to check user emotion</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app uses microphone for user voice recording and communication</string>
+	<key>NSMotionUsageDescription</key>
+	<string>This app uses motion data to improve face tracking stability.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIFileSharingEnabled</key>

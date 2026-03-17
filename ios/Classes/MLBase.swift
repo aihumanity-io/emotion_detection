@@ -12,8 +12,15 @@ import Foundation
 import CoreML
 
 
-enum MLError: Error {
+enum MLError: LocalizedError {
   case Error(_ message: String)
+
+  var errorDescription: String? {
+      switch self {
+      case .Error(let message):
+          return message
+      }
+  }
 }
 
 extension Sequence where Element: Hashable {

@@ -77,11 +77,26 @@ private extension EmotionDetectionPlugin {
     }
 
     func ensureModelsReady() throws {
+        var lastError: Error?
         if EmotionDetectionPlugin.ahiEmotionModel == nil {
-            EmotionDetectionPlugin.ahiEmotionModel = try AIHFerModel(userName: EmotionDetectionPlugin.currentUserName)
+            do {
+                EmotionDetectionPlugin.ahiEmotionModel = try AIHFerModel(userName: EmotionDetectionPlugin.currentUserName)
+            } catch {
+                lastError = error
+                print("AIH model load failed; falling back to mobilenet-only mode: \(error.localizedDescription)")
+            }
         }
         if EmotionDetectionPlugin.emotionModelMobilenet == nil {
-            EmotionDetectionPlugin.emotionModelMobilenet = try EmotionMobilenet(userName: EmotionDetectionPlugin.currentUserName)
+            do {
+                EmotionDetectionPlugin.emotionModelMobilenet = try EmotionMobilenet(userName: EmotionDetectionPlugin.currentUserName)
+            } catch {
+                lastError = error
+            }
+        }
+
+        if EmotionDetectionPlugin.ahiEmotionModel == nil &&
+            EmotionDetectionPlugin.emotionModelMobilenet == nil {
+            throw lastError ?? MLError.Error("No model could be loaded.")
         }
     }
 }
@@ -214,10 +229,17 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
                                         }
                                         //
                                         //let retFromModel = try emotionModel!.runModel(faceImage: faceImage!)
-                                        let startT = Date().timeIntervalSince1970
-                                        let retFromModel = try EmotionDetectionPlugin.ahiEmotionModel!.runModel(faceImage: faceImage!, leftEyeImage: leftEyeImage!,
-                                                                                         rightEyeImage: rightEyeImage!, mouthImage: mouthImage!)
-                                        print("AIH Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
+                                        if let aihModel = EmotionDetectionPlugin.ahiEmotionModel {
+                                            let startT = Date().timeIntervalSince1970
+                                            let retFromModel = try aihModel.runModel(faceImage: faceImage!, leftEyeImage: leftEyeImage!,
+                                                                                             rightEyeImage: rightEyeImage!, mouthImage: mouthImage!)
+                                            print("AIH Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
+                                            return result(retFromModel)
+                                        }
+
+                                        let fallbackStart = Date().timeIntervalSince1970
+                                        let retFromModel = try EmotionDetectionPlugin.emotionModelMobilenet!.runModel(faceImage: faceImage!)
+                                        print("AIH unavailable; Mobilenet fallback time: \((Date().timeIntervalSince1970 - fallbackStart)*1000) ms")
                                         return result(retFromModel)
                                     } else {
                                         // only face dtected
