@@ -60,6 +60,10 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
       handleSetKeyShard(call: call, result: result)
     case "clearKeyShard":
       handleClearKeyShard(call: call, result: result)
+    case "setModelLicense":
+      handleSetModelLicense(call: call, result: result)
+    case "clearModelLicense":
+      handleClearModelLicense(call: call, result: result)
     case "predict":
       handlePredict(call: call, result: result)
     case "registerModel", "warmUp":
@@ -225,8 +229,8 @@ extension EmotionDetectionPlugin: FlutterStreamHandler, AVCaptureVideoDataOutput
       }
       if !map.isEmpty { cameraEventSink?(map) }
     } catch {
-      // Log errors for visibility in debug runs
-      NSLog("EmotionDetectionPlugin capture error: \(error.localizedDescription)")
+      // Keep full error for root-cause debugging (enum/error codes often hidden in localizedDescription).
+      NSLog("EmotionDetectionPlugin capture error: \(String(describing: error))")
     }
   }
 
@@ -288,6 +292,8 @@ extension EmotionDetectionPlugin {
         return result(FlutterError(code: "invalid_args", message: "userCodeB64 must be 32-byte base64", details: nil))
       }
       try User32Store.save(decoded, account: acct, requireBiometrics: requireBiometrics)
+      let userCodePrefix = String(userCodeB64.prefix(8))
+      NSLog("EmotionDetectionPlugin setUserCode account=\(acct) bytes=\(decoded.count) b64prefix=\(userCodePrefix) sha256=\(shortSHA256(decoded))")
       EmotionDetectionPluginState.currentUserName = UserCodeUtils.sanitize(userName: userName)
       result(nil)
     } catch {
@@ -318,6 +324,17 @@ extension EmotionDetectionPlugin {
     let exp = args["expiresAtMs"] as? Int64
     do {
       try ShardCache.setShard(modelId: modelId, base64: keyShardB64, expiresAtMs: exp)
+      if let shardData = Data(base64Encoded: ShardCache.normalizeB64(keyShardB64)) {
+        let shardPrefix = String(keyShardB64.prefix(8))
+        NSLog("EmotionDetectionPlugin setKeyShard modelId=\(modelId) bytes=\(shardData.count) b64prefix=\(shardPrefix) sha256=\(shortSHA256(shardData)) exp=\(exp ?? -1)")
+      } else {
+        NSLog("EmotionDetectionPlugin setKeyShard modelId=\(modelId) invalidBase64")
+      }
+      if let userName = (args["userName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+         !userName.isEmpty {
+        let acct = UserCodeUtils.sanitize(userName: userName)
+        try? ShardCache.setShard(modelId: acct, base64: keyShardB64, expiresAtMs: exp)
+      }
       result(nil)
     } catch {
       result(FlutterError(code: "shard_store_error", message: error.localizedDescription, details: nil))
@@ -329,6 +346,39 @@ extension EmotionDetectionPlugin {
       return result(FlutterError(code: "invalid_args", message: "modelId required", details: nil))
     }
     ShardCache.clearShard(modelId: modelId)
+    result(nil)
+  }
+
+  private func handleSetModelLicense(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let modelId = args["modelId"] as? String else {
+      return result(FlutterError(code: "invalid_args", message: "modelId required", details: nil))
+    }
+
+    do {
+      if let licenseMap = args["license"] as? [String: Any] {
+        try LicenseCache.setLicense(modelId: modelId, licenseMap: licenseMap)
+      } else if let licenseJson = args["licenseJson"] as? String {
+        guard let data = licenseJson.data(using: .utf8) else {
+          return result(FlutterError(code: "license_error", message: "licenseJson is not valid UTF-8", details: nil))
+        }
+        try LicenseCache.setLicense(modelId: modelId, jsonData: data)
+      } else {
+        return result(FlutterError(code: "invalid_args", message: "license or licenseJson required", details: nil))
+      }
+      ModelCache.shared.unload(modelId: modelId)
+      result(nil)
+    } catch {
+      result(FlutterError(code: "license_error", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func handleClearModelLicense(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any], let modelId = args["modelId"] as? String else {
+      return result(FlutterError(code: "invalid_args", message: "modelId required", details: nil))
+    }
+    LicenseCache.clear(modelId: modelId)
+    ModelCache.shared.unload(modelId: modelId)
     result(nil)
   }
 }
@@ -469,30 +519,61 @@ final class ModelCache {
   func model(for modelId: String) throws -> MLModel {
     lock.lock(); defer { lock.unlock() }
     if let m = cache[modelId] { return m }
-    let baseName: String
-    if modelId.contains("mobilenetv1_fer") { baseName = "mobilenetv1_fer2024-11-06-08-48-50" }
-    else if modelId.contains("aih_fer") { baseName = "aih_fer20250115" }
-    else { baseName = "mobilenetv1_fer2024-11-06-08-48-50" }
+    let bundle = Bundle(for: EmotionDetectionPlugin.self)
+    let baseName = resolveModelBaseName(for: modelId, in: bundle)
 
     // Load manifest and unwrap CEK using user32 (keychain) and optional shard
-    let bundle = Bundle(for: EmotionDetectionPlugin.self)
-    let manifest = try loadManifestJSON(fromBundle: baseName + ".manifest.json", in: bundle)
-    let modelIdentifier = manifest.model_name
+    let manifestURL = try FileIO.anyBundleURL(name: baseName, ext: "manifest.json", prefer: bundle)
+    NSLog("EmotionDetectionPlugin loading modelId=\(modelId), baseName=\(baseName), manifest=\(manifestURL.path)")
+    let manifest = try decodeManifest(at: manifestURL)
+    let manifestModelId = manifest.resolvedModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+    let lookupModelId = manifestModelId.isEmpty ? modelId : manifestModelId
+    let modelIdentifierCandidates = [
+      lookupModelId,
+      manifest.modelId,
+      manifest.model_id,
+      manifest.model_name,
+      modelId
+    ]
+      .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
     let userName = UserCodeUtils.sanitize(userName: EmotionDetectionPluginState.currentUserName)
     let cek = try obtainCEK_UserCodeGateSync(
       manifest: manifest,
       userName: userName,
-      modelId: modelIdentifier,
-      user32Provider: { try UserCodeUtils.loadUser32(userName: userName, modelId: modelIdentifier) }
+      modelId: lookupModelId,
+      user32Provider: { try UserCodeUtils.loadUser32(userName: userName, modelIds: modelIdentifierCandidates) }
     )
+    NSLog("EmotionDetectionPlugin CEK ready for modelId=\(modelId) bytes=\(cek.count)")
     let model = try EncryptedModelLoader.loadFromBundle(
       baseName: baseName,
       configuration: MLModelConfiguration(),
       framework: bundle,
       obtainKey: { SymmetricKey(data: cek) }
     )
+    NSLog("EmotionDetectionPlugin model ready modelId=\(modelId) baseName=\(baseName)")
     cache[modelId] = model
     return model
+  }
+
+  private func resolveModelBaseName(for modelId: String, in bundle: Bundle) -> String {
+    let candidates: [String]
+    if modelId.contains("aih_fer") {
+      candidates = ["aih_fer", "aih_fer20250115"]
+    } else if modelId.contains("mobilenetv1_fer") {
+      candidates = ["mobilenetv1_fer", "mobilenetv1_fer2024-11-06-08-48-50"]
+    } else {
+      candidates = ["mobilenetv1_fer", "mobilenetv1_fer2024-11-06-08-48-50"]
+    }
+
+    for candidate in candidates {
+      let hasManifest = (try? FileIO.anyBundleURL(name: candidate, ext: "manifest.json", prefer: bundle)) != nil
+      let hasEncryptedModel = (try? FileIO.anyBundleURL(name: candidate, ext: "enc", prefer: bundle)) != nil
+      if hasManifest && hasEncryptedModel { return candidate }
+    }
+
+    NSLog("EmotionDetectionPlugin model assets missing for modelId=\(modelId), candidates=\(candidates)")
+    return candidates[0]
   }
 
   func unload(modelId: String) { lock.lock(); defer { lock.unlock() }; cache.removeValue(forKey: modelId) }
@@ -509,29 +590,152 @@ enum UserCodeUtils {
     if let mid = modelId?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !mid.isEmpty { return "\(base)|\(mid)" }
     return base
   }
-  static func loadUser32(userName: String, modelId: String?) throws -> Data {
-    let acct = account(userName: userName, modelId: modelId)
-    if let cached = try? User32Store.load(account: acct) { return cached }
-    // optional: side-load from bundle if present
-    // Fallback: throw if missing
-    throw NSError(domain: "User32", code: -1, userInfo: [NSLocalizedDescriptionKey: "User32 not found for \(acct)"])
+  static func accountCandidates(userName: String, modelIds: [String]) -> [String] {
+    var accountsToTry = [String]()
+    for modelId in modelIds {
+      let acct = account(userName: userName, modelId: modelId)
+      if accountsToTry.contains(acct) { continue }
+      accountsToTry.append(acct)
+    }
+    let legacy = account(userName: userName, modelId: nil)
+    if !accountsToTry.contains(legacy) { accountsToTry.append(legacy) }
+    return accountsToTry
+  }
+  static func loadUser32(userName: String, modelIds: [String]) throws -> Data {
+    let accountsToTry = accountCandidates(userName: userName, modelIds: modelIds)
+    for acct in accountsToTry {
+      if let cached = try? User32Store.load(account: acct) {
+        NSLog("EmotionDetectionPlugin user32 keychain hit account=\(acct) bytes=\(cached.count)")
+        return cached
+      }
+    }
+    if let sideLoaded = try? User32SideLoad.loadUser32Data(bundle: Bundle.main), sideLoaded.count == 32 {
+      NSLog("EmotionDetectionPlugin user32 sideload hit bytes=\(sideLoaded.count)")
+      return sideLoaded
+    }
+    if let sideLoaded = try? User32SideLoad.loadUser32Data(bundle: Bundle(for: EmotionDetectionPlugin.self)), sideLoaded.count == 32 {
+      NSLog("EmotionDetectionPlugin user32 sideload hit(plugin bundle) bytes=\(sideLoaded.count)")
+      return sideLoaded
+    }
+    throw NSError(domain: "User32", code: -1, userInfo: [
+      NSLocalizedDescriptionKey: "User32 not found for accounts: \(accountsToTry.joined(separator: ", "))"
+    ])
+  }
+}
+
+enum User32SideLoadError: Error { case notFound, badFormat(String) }
+
+struct User32SideLoad {
+  static func sideLoadedURL(
+    fileNames: [String] = ["user32.b64", "user_code.b64", "user32.bin", "user_code.bin", "user32.txt", "user_code.txt"],
+    bundle: Bundle = .main
+  ) throws -> URL {
+    let fm = FileManager.default
+    if let path = ProcessInfo.processInfo.environment["EMO_USER32_PATH"], !path.isEmpty {
+      let u = URL(fileURLWithPath: path)
+      if fm.fileExists(atPath: u.path) { return u }
+    }
+    if let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first {
+      for name in fileNames {
+        let u = docs.appendingPathComponent(name, isDirectory: false)
+        if fm.fileExists(atPath: u.path) { return u }
+      }
+    }
+    if let appSup = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+      for name in fileNames {
+        let u = appSup.appendingPathComponent(name, isDirectory: false)
+        if fm.fileExists(atPath: u.path) { return u }
+      }
+    }
+    for name in fileNames {
+      if let u = bundle.url(forResource: name, withExtension: nil) { return u }
+      let ns = name as NSString
+      let base = ns.deletingPathExtension
+      let ext = ns.pathExtension.isEmpty ? "b64" : ns.pathExtension
+      if let u = bundle.url(forResource: base, withExtension: ext) { return u }
+    }
+    throw User32SideLoadError.notFound
+  }
+
+  static func loadUser32Data(
+    fileNames: [String] = ["user32.b64", "user_code.b64", "user32.bin", "user_code.bin", "user32.txt", "user_code.txt"],
+    bundle: Bundle = .main
+  ) throws -> Data {
+    let url = try sideLoadedURL(fileNames: fileNames, bundle: bundle)
+    let raw = try Data(contentsOf: url)
+    if let s = String(data: raw, encoding: .utf8)?
+      .trimmingCharacters(in: .whitespacesAndNewlines),
+       let b64 = Data(base64Encoded: s),
+       b64.count == 32 {
+      return b64
+    }
+    if raw.count == 32 { return raw }
+    if let s = String(data: raw, encoding: .utf8)?
+      .trimmingCharacters(in: .whitespacesAndNewlines),
+       let hex = Data(hexString: s),
+       hex.count == 32 {
+      return hex
+    }
+    throw User32SideLoadError.badFormat("Expected base64(32B), raw 32B, or 64-hex")
+  }
+}
+
+private extension Data {
+  init?(hexString: String) {
+    let s = hexString.lowercased()
+      .replacingOccurrences(of: "0x", with: "")
+      .replacingOccurrences(of: " ", with: "")
+    guard s.count % 2 == 0 else { return nil }
+    var out = Data(capacity: s.count / 2)
+    var idx = s.startIndex
+    while idx < s.endIndex {
+      let next = s.index(idx, offsetBy: 2)
+      let byteStr = s[idx..<next]
+      guard let b = UInt8(byteStr, radix: 16) else { return nil }
+      out.append(b)
+      idx = next
+    }
+    self = out
   }
 }
 
 enum User32StoreErr: Error { case badStatus(OSStatus) }
 enum User32Store {
   static let service = "com.creataai.emotionsdk.user32"
-  static func delete(account: String) throws {
+  private static let volatileLock = NSLock()
+  private static var volatileUser32: [String: Data] = [:]
+
+  private static func setVolatile(_ data: Data, account: String) {
+    volatileLock.lock(); defer { volatileLock.unlock() }
+    volatileUser32[account] = data
+  }
+
+  private static func getVolatile(account: String) -> Data? {
+    volatileLock.lock(); defer { volatileLock.unlock() }
+    return volatileUser32[account]
+  }
+
+  private static func clearVolatile(account: String) {
+    volatileLock.lock(); defer { volatileLock.unlock() }
+    volatileUser32.removeValue(forKey: account)
+  }
+
+  static func delete(account: String, clearVolatileCache: Bool = true) throws {
+    if clearVolatileCache { clearVolatile(account: account) }
     var q: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
       kSecAttrAccount as String: account,
       kSecAttrSynchronizable as String: kSecAttrSynchronizableAny
     ]
+    q.removeValue(forKey: kSecUseAuthenticationUI as String)
     let st = SecItemDelete(q as CFDictionary)
-    guard st == errSecSuccess || st == errSecItemNotFound else { throw User32StoreErr.badStatus(st) }
+    guard st == errSecSuccess || st == errSecItemNotFound else {
+      throw User32StoreErr.badStatus(st)
+    }
   }
   static func save(_ data: Data, account: String, requireBiometrics: Bool) throws {
+    try delete(account: account, clearVolatileCache: false)
     var q: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -545,12 +749,16 @@ enum User32Store {
         q[kSecAttrAccessControl as String] = ac
       }
     }
-    try? delete(account: account)
     let st = SecItemAdd(q as CFDictionary, nil)
     guard st == errSecSuccess else { throw User32StoreErr.badStatus(st) }
+    setVolatile(data, account: account)
   }
   static func load(account: String) throws -> Data {
-    let q: [String:Any] = [
+    if let volatile = getVolatile(account: account) {
+      NSLog("EmotionDetectionPlugin user32 load source=volatile account=\(account) bytes=\(volatile.count)")
+      return volatile
+    }
+    var q: [String:Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
       kSecAttrAccount as String: account,
@@ -559,8 +767,50 @@ enum User32Store {
     ]
     var item: CFTypeRef?
     let st = SecItemCopyMatching(q as CFDictionary, &item)
-    guard st == errSecSuccess, let d = item as? Data else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(st)) }
-    return d
+    if st == errSecSuccess, let d = item as? Data {
+      NSLog("EmotionDetectionPlugin user32 load source=keychain account=\(account) bytes=\(d.count)")
+      return d
+    }
+    throw NSError(domain: NSOSStatusErrorDomain, code: Int(st))
+  }
+
+  static func loadNoUI(account: String) throws -> Data {
+    return try load(account: account)
+  }
+
+  static func volatileCandidates(forUserName userName: String) -> [(String, Data)] {
+    let prefix = UserCodeUtils.sanitize(userName: userName) + "|"
+    let exact = UserCodeUtils.sanitize(userName: userName)
+    volatileLock.lock(); defer { volatileLock.unlock() }
+    return volatileUser32.compactMap { (acct, data) in
+      if acct.hasPrefix(prefix) || acct == exact { return (acct, data) }
+      return nil
+    }
+  }
+
+  static func keychainCandidates(forUserName userName: String) -> [(String, Data)] {
+    let prefix = UserCodeUtils.sanitize(userName: userName) + "|"
+    let exact = UserCodeUtils.sanitize(userName: userName)
+    let q: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecReturnAttributes as String: true,
+      kSecReturnData as String: true,
+      kSecMatchLimit as String: kSecMatchLimitAll
+    ]
+    var out: CFTypeRef?
+    let st = SecItemCopyMatching(q as CFDictionary, &out)
+    guard st == errSecSuccess else { return [] }
+    guard let items = out as? [[String: Any]] else { return [] }
+
+    var result: [(String, Data)] = []
+    for item in items {
+      guard let account = item[kSecAttrAccount as String] as? String else { continue }
+      guard account == exact || account.hasPrefix(prefix) else { continue }
+      guard let data = item[kSecValueData as String] as? Data, data.count == 32 else { continue }
+      result.append((account, data))
+    }
+    return result
   }
 }
 
@@ -586,28 +836,222 @@ enum ShardCache {
     for id in identifiers { let t = id.trimmingCharacters(in: .whitespacesAndNewlines); guard !t.isEmpty, let lease = shards[t] else { continue }; if lease.isExpired(now: now) { shards.removeValue(forKey: t); continue }; return lease }
     return nil
   }
+  static func activeShards(for identifiers: [String], now: Date = Date()) -> [(String, CekShardLease)] {
+    lock.lock(); defer { lock.unlock() }
+    var out: [(String, CekShardLease)] = []
+    var seen = Set<String>()
+    for id in identifiers {
+      let key = id.trimmingCharacters(in: .whitespacesAndNewlines)
+      if key.isEmpty || seen.contains(key) { continue }
+      seen.insert(key)
+      guard let lease = shards[key] else { continue }
+      if lease.isExpired(now: now) {
+        shards.removeValue(forKey: key)
+        continue
+      }
+      out.append((key, lease))
+    }
+    return out
+  }
+  static func allActiveShards(now: Date = Date()) -> [(String, CekShardLease)] {
+    lock.lock(); defer { lock.unlock() }
+    var out: [(String, CekShardLease)] = []
+    for (key, lease) in shards {
+      if lease.isExpired(now: now) {
+        shards.removeValue(forKey: key)
+        continue
+      }
+      out.append((key, lease))
+    }
+    return out
+  }
   static func normalizeB64(_ value: String) -> String { var s = value.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/"); let missing = (4 - s.count % 4) % 4; if missing > 0 { s = s.padding(toLength: s.count + missing, withPad: "=", startingAt: 0) }; return s }
+}
+
+enum DistributionMode {
+  case unified
+  case perDeveloper
+}
+
+struct LicenseDoc: Decodable {
+  struct Wrap: Decodable {
+    let type: String
+    let wrapIv: String
+    let salt: String
+    let shardUsed: Bool
+    let aad: String?
+  }
+
+  let version: Int
+  let licenseId: String
+  let userId: String
+  let modelId: String
+  let algo: String
+  let plainSha256: String
+  let wrap: Wrap
+  let wrappedCek: String
+  let issuedAt: String
+  let expiresAt: String?
+}
+
+enum LicenseCache {
+  private static var docs: [String: LicenseDoc] = [:]
+  private static let lock = NSLock()
+
+  static func setLicense(modelId rawModelId: String, license: LicenseDoc) {
+    let modelId = rawModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !modelId.isEmpty else { return }
+    lock.lock(); defer { lock.unlock() }
+    docs[modelId] = license
+    docs[license.modelId] = license
+    NSLog("EmotionDetectionPlugin license set id=\(modelId) modelId=\(license.modelId)")
+  }
+
+  static func setLicense(modelId rawModelId: String, jsonData: Data) throws {
+    let doc = try JSONDecoder().decode(LicenseDoc.self, from: jsonData)
+    setLicense(modelId: rawModelId, license: doc)
+  }
+
+  static func setLicense(modelId rawModelId: String, licenseMap: [String: Any]) throws {
+    let data = try JSONSerialization.data(withJSONObject: licenseMap, options: [])
+    try setLicense(modelId: rawModelId, jsonData: data)
+  }
+
+  static func clear(modelId rawModelId: String) {
+    let modelId = rawModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !modelId.isEmpty else { return }
+    lock.lock(); defer { lock.unlock() }
+    if let doc = docs[modelId] { docs.removeValue(forKey: doc.modelId) }
+    docs.removeValue(forKey: modelId)
+  }
+
+  static func firstMatch(candidates: [String]) -> LicenseDoc? {
+    lock.lock(); defer { lock.unlock() }
+    for candidate in candidates {
+      let key = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+      if key.isEmpty { continue }
+      if let doc = docs[key] { return doc }
+    }
+    return nil
+  }
 }
 
 // MARK: - Minimal encryption + manifest loaders
 
 struct ModelManifest: Decodable {
+  struct ManifestWrap: Decodable {
+    let type: String?
+    let salt: String?
+    let iv: String?
+    let rsaScheme: String?
+    let rsaKeyId: String?
+    let shardRequired: Bool?
+  }
+
+  // Legacy fields
   let model_name: String
   let model_id: String?
-  let version: String
+  let version: String?
   let zip_sha256: String
   let enc_sha256: String
   let aad: String
-  let algorithm: String
-  let combined_format: String
-  let nonce_len: Int
-  let tag_len: Int
-  let created_at: String
+  let algorithm: String?
+  let combined_format: String?
+  let nonce_len: Int?
+  let tag_len: Int?
+  let created_at: String?
   let wrapped_cek_b64: String
   let kdf_info: String
   let shard_required: Bool?
-  let shardRequired: Bool?
   let expiry_epoch_ms: Int?
+
+  // Newer fields (kept for compatibility with iOS logic).
+  let distributionMode: String?
+  let modelId: String?
+  let algo: String?
+  let ciphertextLen: Int?
+  let gcmIv: String?
+  let plainSha256: String?
+  let wrappedCek: String?
+  let wrap: ManifestWrap?
+
+  var resolvedModelId: String {
+    if let v = modelId?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty { return v }
+    if let v = model_id?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty { return v }
+    let v = model_name.trimmingCharacters(in: .whitespacesAndNewlines)
+    return v
+  }
+
+  var shardRequiredPolicy: Bool {
+    return shard_required ?? wrap?.shardRequired ?? false
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case model_name
+    case model_id
+    case version
+    case zip_sha256
+    case enc_sha256
+    case aad
+    case algorithm
+    case combined_format
+    case nonce_len
+    case tag_len
+    case created_at
+    case wrapped_cek_b64
+    case kdf_info
+    case shard_required
+    case shardRequired
+    case expiry_epoch_ms
+
+    case distributionMode
+    case modelId
+    case algo
+    case ciphertextLen
+    case gcmIv
+    case plainSha256
+    case wrappedCek
+    case wrap
+  }
+
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+
+    model_name = try c.decodeIfPresent(String.self, forKey: .model_name) ?? ""
+    model_id = try c.decodeIfPresent(String.self, forKey: .model_id)
+    if let stringVersion = (try? c.decodeIfPresent(String.self, forKey: .version)) ?? nil {
+      version = stringVersion
+    } else if let intVersion = (try? c.decodeIfPresent(Int.self, forKey: .version)) ?? nil {
+      version = String(intVersion)
+    } else {
+      version = nil
+    }
+    zip_sha256 = try c.decodeIfPresent(String.self, forKey: .zip_sha256) ?? ""
+    enc_sha256 = try c.decodeIfPresent(String.self, forKey: .enc_sha256) ?? ""
+    aad = try c.decodeIfPresent(String.self, forKey: .aad) ?? ""
+    algorithm = try c.decodeIfPresent(String.self, forKey: .algorithm)
+    combined_format = try c.decodeIfPresent(String.self, forKey: .combined_format)
+    nonce_len = try c.decodeIfPresent(Int.self, forKey: .nonce_len)
+    tag_len = try c.decodeIfPresent(Int.self, forKey: .tag_len)
+    created_at = try c.decodeIfPresent(String.self, forKey: .created_at)
+    wrapped_cek_b64 = try c.decodeIfPresent(String.self, forKey: .wrapped_cek_b64) ?? ""
+    kdf_info = try c.decodeIfPresent(String.self, forKey: .kdf_info) ?? ""
+    let shardSnake = try c.decodeIfPresent(Bool.self, forKey: .shard_required)
+    let shardCamel = try c.decodeIfPresent(Bool.self, forKey: .shardRequired)
+    shard_required = shardSnake ?? shardCamel
+    expiry_epoch_ms = try c.decodeIfPresent(Int.self, forKey: .expiry_epoch_ms)
+
+    distributionMode = try c.decodeIfPresent(String.self, forKey: .distributionMode)
+    modelId = try c.decodeIfPresent(String.self, forKey: .modelId)
+    let algoValue = try c.decodeIfPresent(String.self, forKey: .algo)
+    let algorithmValue = try c.decodeIfPresent(String.self, forKey: .algorithm)
+    algo = algoValue ?? algorithmValue
+    ciphertextLen = try c.decodeIfPresent(Int.self, forKey: .ciphertextLen)
+    gcmIv = try c.decodeIfPresent(String.self, forKey: .gcmIv)
+    plainSha256 = try c.decodeIfPresent(String.self, forKey: .plainSha256)
+    wrappedCek = try c.decodeIfPresent(String.self, forKey: .wrappedCek)
+    wrap = try c.decodeIfPresent(ManifestWrap.self, forKey: .wrap)
+  }
 }
 
 enum ManifestLoadError: Error { case notFound, readFailed, decodeFailed(Error) }
@@ -641,7 +1085,38 @@ func loadManifestJSON(fromBundle name: String, in bundle: Bundle = .main) throws
 private func decodeManifest(at url: URL) throws -> ModelManifest { do { let d = try Data(contentsOf: url); return try JSONDecoder().decode(ModelManifest.self, from: d) } catch let err as DecodingError { throw ManifestLoadError.decodeFailed(err) } catch { throw ManifestLoadError.readFailed } }
 
 enum CryptoError: Error { case badCiphertext }
-struct ModelCrypto { static func decrypt(combined: Data, key: SymmetricKey, aad: Data) throws -> Data { let box = try AES.GCM.SealedBox(combined: combined); return try AES.GCM.open(box, using: key, authenticating: aad) }; static func sha256Hex(_ data: Data) -> String { let dig = SHA256.hash(data: data); return dig.map { String(format: "%02x", $0) }.joined() } }
+struct ModelCrypto {
+  static func decrypt(combined: Data, key: SymmetricKey, aad: Data) throws -> Data {
+    let box = try AES.GCM.SealedBox(combined: combined)
+    return try AES.GCM.open(box, using: key, authenticating: aad)
+  }
+
+  static func decrypt(iv: Data, combinedCtTag: Data, key: SymmetricKey, aad: Data) throws -> Data {
+    guard combinedCtTag.count > 16 else { throw CryptoError.badCiphertext }
+    let ct = combinedCtTag.prefix(combinedCtTag.count - 16)
+    let tag = combinedCtTag.suffix(16)
+    let box = try AES.GCM.SealedBox(
+      nonce: AES.GCM.Nonce(data: iv),
+      ciphertext: ct,
+      tag: tag
+    )
+    return try AES.GCM.open(box, using: key, authenticating: aad)
+  }
+
+  static func sha256Hex(_ data: Data) -> String {
+    let dig = SHA256.hash(data: data)
+    return dig.map { String(format: "%02x", $0) }.joined()
+  }
+
+  static func sha256Base64URL(_ data: Data) -> String {
+    let digest = Data(SHA256.hash(data: data))
+    return digest
+      .base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-")
+      .replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
+  }
+}
 
 enum FileErr: Error { case missing, unzip, notFound, noMLPackage }
 struct FileIO {
@@ -711,16 +1186,36 @@ struct EncryptedModelLoader {
   static func loadFromBundle(baseName: String, configuration: MLModelConfiguration, framework: Bundle, obtainKey: () throws -> SymmetricKey) throws -> MLModel {
     let manifestURL = try FileIO.anyBundleURL(name: baseName, ext: "manifest.json", prefer: framework)
     let encURL = try FileIO.anyBundleURL(name: baseName, ext: "enc", prefer: framework)
+    NSLog("EmotionDetectionPlugin decrypt start base=\(baseName) manifest=\(manifestURL.lastPathComponent) enc=\(encURL.lastPathComponent)")
     let manifest = try JSONDecoder().decode(ModelManifest.self, from: Data(contentsOf: manifestURL))
     let encData = try Data(contentsOf: encURL)
     let encHash = ModelCrypto.sha256Hex(encData)
-    guard encHash == manifest.enc_sha256 else { throw EncryptedLoadError.integrityFailed }
-    let key = try obtainKey(); let aad = Data(manifest.aad.utf8)
-    let zipData = try ModelCrypto.decrypt(combined: encData, key: key, aad: aad)
-    let zipHash = ModelCrypto.sha256Hex(zipData)
-    guard zipHash == manifest.zip_sha256 else { throw EncryptedLoadError.integrityFailed }
+    if !manifest.enc_sha256.isEmpty {
+      guard encHash == manifest.enc_sha256 else { throw EncryptedLoadError.integrityFailed }
+    }
+    let key = try obtainKey()
+    let aad = Data(manifest.aad.utf8)
+    let zipData: Data
+    if let ivRaw = manifest.gcmIv, !ivRaw.isEmpty {
+      guard let iv = Data(base64Encoded: ShardCache.normalizeB64(ivRaw)) else {
+        throw EncryptedLoadError.integrityFailed
+      }
+      zipData = try ModelCrypto.decrypt(iv: iv, combinedCtTag: encData, key: key, aad: aad)
+    } else {
+      zipData = try ModelCrypto.decrypt(combined: encData, key: key, aad: aad)
+    }
+    if !manifest.zip_sha256.isEmpty {
+      let zipHash = ModelCrypto.sha256Hex(zipData)
+      guard zipHash == manifest.zip_sha256 else { throw EncryptedLoadError.integrityFailed }
+    } else if let plainSha = manifest.plainSha256, !plainSha.isEmpty {
+      let calc = ModelCrypto.sha256Base64URL(zipData)
+      guard calc == plainSha else { throw EncryptedLoadError.integrityFailed }
+    }
+    NSLog("EmotionDetectionPlugin decrypt ok base=\(baseName) zipBytes=\(zipData.count)")
     let work = try FileIO.tempDir("model_dec_\(baseName)"); let zipOut = work.appendingPathComponent("model_\(baseName).zip"); try zipData.write(to: zipOut, options: .atomic); try FileIO.unzip(zipOut, to: work)
+    NSLog("EmotionDetectionPlugin unzip ok base=\(baseName) dir=\(work.path)")
     let pkg = try FileIO.findMLPackage(in: work); let compiled = try MLModel.compileModel(at: pkg)
+    NSLog("EmotionDetectionPlugin compile ok base=\(baseName) compiled=\(compiled.lastPathComponent)")
     return try MLModel(contentsOf: compiled, configuration: configuration)
   }
 }
@@ -738,7 +1233,11 @@ extension MLMultiArray {
 
 // MARK: - CEK unwrap (UserCode gate + optional shard)
 
-// HKDF-SHA256 (RFC 5869) using CryptoKit HMAC; available on macOS 10.15+
+private func shortSHA256(_ data: Data) -> String {
+  return String(ModelCrypto.sha256Hex(data).prefix(12))
+}
+
+// HKDF-SHA256 (RFC 5869) fallback for macOS < 11.
 private func hkdfSHA256(ikm: Data, salt: Data, info: Data, outputLength: Int) -> Data {
   let saltKey = SymmetricKey(data: salt.isEmpty ? Data(repeating: 0, count: 32) : salt)
   let prkMac = HMAC<SHA256>.authenticationCode(for: ikm, using: saltKey)
@@ -761,18 +1260,328 @@ private func hkdfSHA256(ikm: Data, salt: Data, info: Data, outputLength: Int) ->
 }
 
 private func deriveKEK(user32: Data, shard: Data?, aad: String, kdfInfo: String) -> SymmetricKey {
-  // Packaging binds shard via AAD/salt, not in IKM.
-  let ikm = user32
+  var ikm = Data(user32)
+  if let shard, !shard.isEmpty { ikm.append(shard) }
   let salt = Data(aad.utf8)
   let info = Data(kdfInfo.utf8)
+  if #available(macOS 11.0, *) {
+    // Keep HKDF behavior aligned with iOS: IKM = user32 || shard?
+    return HKDF<SHA256>.deriveKey(
+      inputKeyMaterial: SymmetricKey(data: ikm),
+      salt: salt,
+      info: info,
+      outputByteCount: 32
+    )
+  }
+  let keyData = hkdfSHA256(ikm: ikm, salt: salt, info: info, outputLength: 32)
+  return SymmetricKey(data: keyData)
+}
+
+private func deriveHKDFKey(ikm: Data, salt: Data, info: Data) -> SymmetricKey {
+  if #available(macOS 11.0, *) {
+    return HKDF<SHA256>.deriveKey(
+      inputKeyMaterial: SymmetricKey(data: ikm),
+      salt: salt,
+      info: info,
+      outputByteCount: 32
+    )
+  }
   let keyData = hkdfSHA256(ikm: ikm, salt: salt, info: info, outputLength: 32)
   return SymmetricKey(data: keyData)
 }
 
 private func unwrapCEK_fromManifest(wrappedCEK_B64: String, kek: SymmetricKey, aad: String) throws -> Data {
-  let env = Data(base64Encoded: wrappedCEK_B64.trimmingCharacters(in: .whitespacesAndNewlines))!
+  guard let env = Data(base64Encoded: wrappedCEK_B64.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+    throw NSError(
+      domain: "CEKAuth",
+      code: -9,
+      userInfo: [NSLocalizedDescriptionKey: "Invalid wrapped_cek_b64 encoding"]
+    )
+  }
   let box = try AES.GCM.SealedBox(combined: env)
   return try AES.GCM.open(box, using: kek, authenticating: Data(aad.utf8))
+}
+
+private func decodeB64Any(_ value: String) -> Data? {
+  if let direct = Data(base64Encoded: value) { return direct }
+  return Data(base64Encoded: ShardCache.normalizeB64(value))
+}
+
+private func parseISO8601(_ value: String) -> Date? {
+  let formatter = ISO8601DateFormatter()
+  if let d = formatter.date(from: value) { return d }
+  formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+  return formatter.date(from: value)
+}
+
+private func detectDistributionMode(_ manifest: ModelManifest) -> DistributionMode {
+  if let raw = manifest.distributionMode?.lowercased() {
+    if raw == "unified" { return .unified }
+    if raw == "per-developer" { return .perDeveloper }
+  }
+  if let wrapType = manifest.wrap?.type {
+    if wrapType == "RSA-OAEP-256" || wrapType == "external" { return .unified }
+    if wrapType.hasPrefix("HKDF-SHA256+code") { return .perDeveloper }
+  }
+  if !manifest.wrapped_cek_b64.isEmpty {
+    return .perDeveloper
+  }
+  return .unified
+}
+
+private func licenseCandidates(manifest: ModelManifest, effectiveModelId: String, userName: String) -> [String] {
+  var out: [String] = []
+  let sanitizedUser = UserCodeUtils.sanitize(userName: userName)
+  for value in [effectiveModelId, manifest.modelId, manifest.model_id, manifest.model_name, sanitizedUser] {
+    guard let s = value?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { continue }
+    if !out.contains(s) { out.append(s) }
+  }
+  return out
+}
+
+private func loadLicenseIfPresent(
+  manifest: ModelManifest,
+  effectiveModelId: String,
+  userName: String,
+  in bundle: Bundle = .main
+) -> LicenseDoc? {
+  let candidates = licenseCandidates(manifest: manifest, effectiveModelId: effectiveModelId, userName: userName)
+  if let cached = LicenseCache.firstMatch(candidates: candidates) { return cached }
+  for candidate in candidates {
+    let names = ["\(candidate).macos.license", "\(candidate).ios.license", "\(candidate).license", candidate]
+    for name in names {
+      guard let url = bundle.url(forResource: name, withExtension: "json"),
+            let data = try? Data(contentsOf: url),
+            let license = try? JSONDecoder().decode(LicenseDoc.self, from: data) else { continue }
+      LicenseCache.setLicense(modelId: candidate, license: license)
+      return license
+    }
+  }
+  return nil
+}
+
+private func resolveShardLease(
+  manifest: ModelManifest,
+  effectiveModelId: String,
+  userName: String
+) throws -> CekShardLease? {
+  if let manifestExpiry = manifest.expiry_epoch_ms {
+    let expiryDate = Date(timeIntervalSince1970: TimeInterval(manifestExpiry) / 1000.0)
+    if Date() >= expiryDate {
+      throw NSError(
+        domain: "CEKAuth",
+        code: -6,
+        userInfo: [NSLocalizedDescriptionKey: "Shard expired by manifest expiry for \(effectiveModelId)"]
+      )
+    }
+  }
+
+  let candidates = [
+    effectiveModelId,
+    manifest.modelId,
+    manifest.model_id,
+    manifest.model_name,
+    UserCodeUtils.sanitize(userName: userName)
+  ]
+    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+    .filter { !$0.isEmpty }
+
+  let lease = ShardCache.activeShard(for: candidates)
+  if manifest.shardRequiredPolicy && lease == nil {
+    throw NSError(
+      domain: "CEKAuth",
+      code: -3,
+      userInfo: [NSLocalizedDescriptionKey: "Shard required but missing for model candidates: \(candidates.joined(separator: ", "))"]
+    )
+  }
+  if let lease, lease.isExpired() {
+    throw NSError(
+      domain: "CEKAuth",
+      code: -6,
+      userInfo: [NSLocalizedDescriptionKey: "Shard expired for model \(effectiveModelId)"]
+    )
+  }
+  return lease
+}
+
+private func unwrapCEKFromLicense(user32: Data, shard: Data?, license: LicenseDoc) throws -> Data {
+  if license.wrap.shardUsed && shard == nil {
+    throw NSError(domain: "CEKAuth", code: -3, userInfo: [NSLocalizedDescriptionKey: "License requires shard"])
+  }
+
+  let ikm: Data = {
+    if let shard {
+      var out = Data(user32)
+      out.append(shard)
+      return out
+    }
+    return Data(user32)
+  }()
+
+  guard let salt = decodeB64Any(license.wrap.salt),
+        let iv = decodeB64Any(license.wrap.wrapIv),
+        let combined = decodeB64Any(license.wrappedCek),
+        combined.count > 16 else {
+    throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "Invalid license wrap fields"])
+  }
+
+  let info = Data("model:\(license.modelId)".utf8)
+  let kek = deriveHKDFKey(ikm: ikm, salt: salt, info: info)
+  let ct = combined.prefix(combined.count - 16)
+  let tag = combined.suffix(16)
+  let aad = Data((license.wrap.aad ?? "").utf8)
+  let box = try AES.GCM.SealedBox(
+    nonce: AES.GCM.Nonce(data: iv),
+    ciphertext: ct,
+    tag: tag
+  )
+  let cek = try AES.GCM.open(box, using: kek, authenticating: aad)
+  guard cek.count == 32 else {
+    throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "Invalid CEK length from license"])
+  }
+  return cek
+}
+
+private func unwrapV2ManifestCEK(user32: Data, shard: Data?, manifest: ModelManifest, effectiveModelId: String) throws -> Data {
+  guard let wrap = manifest.wrap,
+        let wrapType = wrap.type,
+        wrapType.hasPrefix("HKDF-SHA256+code"),
+        let wrapIvRaw = wrap.iv,
+        let wrapSaltRaw = wrap.salt,
+        let wrappedRaw = manifest.wrappedCek,
+        !manifest.aad.isEmpty else {
+    throw NSError(domain: "CEKAuth", code: -10, userInfo: [NSLocalizedDescriptionKey: "Manifest missing v2 wrap fields"])
+  }
+
+  let typeRequiresShard = wrapType.contains("+shard+")
+  let shardRequired = manifest.shardRequiredPolicy || typeRequiresShard
+  if shardRequired && shard == nil {
+    throw NSError(domain: "CEKAuth", code: -3, userInfo: [NSLocalizedDescriptionKey: "Manifest v2 wrap requires shard"])
+  }
+
+  let ikm: Data = {
+    if shardRequired, let shard {
+      var out = Data(user32)
+      out.append(shard)
+      return out
+    }
+    return Data(user32)
+  }()
+
+  guard let wrapIv = decodeB64Any(wrapIvRaw),
+        let wrapSalt = decodeB64Any(wrapSaltRaw),
+        let ctTag = decodeB64Any(wrappedRaw),
+        ctTag.count > 16 else {
+    throw NSError(domain: "CEKAuth", code: -10, userInfo: [NSLocalizedDescriptionKey: "Manifest v2 wrap decode failed"])
+  }
+
+  let info = Data("model:\(effectiveModelId)".utf8)
+  let kek = deriveHKDFKey(ikm: ikm, salt: wrapSalt, info: info)
+  let ct = ctTag.prefix(ctTag.count - 16)
+  let tag = ctTag.suffix(16)
+  let box = try AES.GCM.SealedBox(
+    nonce: AES.GCM.Nonce(data: wrapIv),
+    ciphertext: ct,
+    tag: tag
+  )
+  let cek = try AES.GCM.open(box, using: kek, authenticating: Data(manifest.aad.utf8))
+  guard cek.count == 32 else {
+    throw NSError(domain: "CEKAuth", code: -10, userInfo: [NSLocalizedDescriptionKey: "Invalid CEK length from manifest v2 wrap"])
+  }
+  return cek
+}
+
+private func resolveCEKForUser32(
+  manifest: ModelManifest,
+  effectiveModelId: String,
+  userName: String,
+  user32: Data
+) throws -> Data {
+  guard user32.count == 32 else {
+    throw NSError(domain: "User32", code: -2, userInfo: [NSLocalizedDescriptionKey: "user32 must be 32 bytes"])
+  }
+
+  let lease = try resolveShardLease(manifest: manifest, effectiveModelId: effectiveModelId, userName: userName)
+  let shardForLegacy = manifest.shardRequiredPolicy ? lease?.shard : nil
+
+  switch detectDistributionMode(manifest) {
+  case .unified:
+    guard let license = loadLicenseIfPresent(
+      manifest: manifest,
+      effectiveModelId: effectiveModelId,
+      userName: userName,
+      in: Bundle(for: EmotionDetectionPlugin.self)
+    ) else {
+      throw NSError(domain: "CEKAuth", code: -7, userInfo: [NSLocalizedDescriptionKey: "License required for unified distribution mode"])
+    }
+
+    let expectedIds = Set([
+      effectiveModelId,
+      manifest.modelId,
+      manifest.model_id,
+      manifest.model_name
+    ].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+    if !expectedIds.isEmpty && !expectedIds.contains(license.modelId) {
+      throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "License modelId mismatch"])
+    }
+    if let expectedHash = manifest.plainSha256, !expectedHash.isEmpty, license.plainSha256 != expectedHash {
+      throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "License plainSha256 mismatch"])
+    }
+    if let algo = manifest.algo, !algo.isEmpty, license.algo != algo {
+      throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "License algo mismatch"])
+    }
+    if let expRaw = license.expiresAt, !expRaw.isEmpty {
+      guard let exp = parseISO8601(expRaw), exp > Date() else {
+        throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "License expired"])
+      }
+    }
+
+    if license.wrap.shardUsed && lease == nil {
+      throw NSError(domain: "CEKAuth", code: -3, userInfo: [NSLocalizedDescriptionKey: "License wrap requires shard"])
+    }
+    let shardData = license.wrap.shardUsed ? lease?.shard : nil
+    return try unwrapCEKFromLicense(user32: user32, shard: shardData, license: license)
+
+  case .perDeveloper:
+    // Prefer license if provided, then fall back to legacy manifest wrapped CEK.
+    if let license = loadLicenseIfPresent(
+      manifest: manifest,
+      effectiveModelId: effectiveModelId,
+      userName: userName,
+      in: Bundle(for: EmotionDetectionPlugin.self)
+    ) {
+      do {
+        let shardData = license.wrap.shardUsed ? lease?.shard : nil
+        let cek = try unwrapCEKFromLicense(user32: user32, shard: shardData, license: license)
+        NSLog("EmotionDetectionPlugin CEK license unwrap ok model=\(effectiveModelId) shardUsed=\(license.wrap.shardUsed)")
+        return cek
+      } catch {
+        NSLog("EmotionDetectionPlugin CEK license unwrap failed model=\(effectiveModelId); fallback to legacy: \(error)")
+      }
+    }
+
+    if !manifest.wrapped_cek_b64.isEmpty, !manifest.kdf_info.isEmpty, !manifest.aad.isEmpty {
+      let shardB64 = lease?.shardB64 ?? lease?.shard.base64EncodedString()
+      let aadAuth = manifest.shardRequiredPolicy ? "\(manifest.aad)|shard:\(shardB64 ?? "")" : manifest.aad
+      do {
+        let kek = deriveKEK(user32: user32, shard: nil, aad: aadAuth, kdfInfo: manifest.kdf_info)
+        return try unwrapCEK_fromManifest(wrappedCEK_B64: manifest.wrapped_cek_b64, kek: kek, aad: aadAuth)
+      } catch {
+        if let shard = shardForLegacy {
+          let fallback = deriveKEK(user32: user32, shard: shard, aad: aadAuth, kdfInfo: manifest.kdf_info)
+          return try unwrapCEK_fromManifest(wrappedCEK_B64: manifest.wrapped_cek_b64, kek: fallback, aad: aadAuth)
+        }
+        throw error
+      }
+    }
+
+    return try unwrapV2ManifestCEK(
+      user32: user32,
+      shard: shardForLegacy,
+      manifest: manifest,
+      effectiveModelId: effectiveModelId
+    )
+  }
 }
 
 private func obtainCEK_UserCodeGateSync(
@@ -781,32 +1590,87 @@ private func obtainCEK_UserCodeGateSync(
   modelId: String?,
   user32Provider: () throws -> Data
 ) throws -> Data {
-  // Load or import user32
-  let acct = UserCodeUtils.account(userName: userName, modelId: modelId)
-  let user32: Data
-  if let cached = try? User32Store.load(account: acct) {
-    user32 = cached
-  } else {
+  // iOS parity: prefer requested model id, then manifest model id.
+  let effectiveModelId = [modelId, manifest.resolvedModelId]
+    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+    .first(where: { !$0.isEmpty }) ?? ""
+  let modelCandidates = [
+    effectiveModelId,
+    manifest.modelId,
+    manifest.model_id,
+    manifest.model_name
+  ]
+    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+    .filter { !$0.isEmpty }
+  let accountsToTry = UserCodeUtils.accountCandidates(userName: userName, modelIds: modelCandidates)
+  let accountHint = accountsToTry.first ?? UserCodeUtils.account(
+    userName: userName,
+    modelId: effectiveModelId.isEmpty ? nil : effectiveModelId
+  )
+
+  var user32Candidates: [(account: String, data: Data)] = []
+  for acct in accountsToTry {
+    guard !user32Candidates.contains(where: { $0.account == acct }) else { continue }
+    if let cached = try? User32Store.load(account: acct), cached.count == 32 {
+      user32Candidates.append((account: acct, data: cached))
+    }
+  }
+  for candidate in User32Store.volatileCandidates(forUserName: userName) {
+    guard !user32Candidates.contains(where: { $0.account == candidate.0 }) else { continue }
+    guard candidate.1.count == 32 else { continue }
+    user32Candidates.append((account: candidate.0, data: candidate.1))
+  }
+  for candidate in User32Store.keychainCandidates(forUserName: userName) {
+    guard !user32Candidates.contains(where: { $0.account == candidate.0 }) else { continue }
+    guard candidate.1.count == 32 else { continue }
+    user32Candidates.append((account: candidate.0, data: candidate.1))
+  }
+  if let sideLoadedMain = try? User32SideLoad.loadUser32Data(bundle: Bundle.main),
+     sideLoadedMain.count == 32,
+     !user32Candidates.contains(where: { $0.data == sideLoadedMain }) {
+    user32Candidates.append((account: "sideload:main", data: sideLoadedMain))
+  }
+  if let sideLoadedPlugin = try? User32SideLoad.loadUser32Data(bundle: Bundle(for: EmotionDetectionPlugin.self)),
+     sideLoadedPlugin.count == 32,
+     !user32Candidates.contains(where: { $0.data == sideLoadedPlugin }) {
+    user32Candidates.append((account: "sideload:plugin", data: sideLoadedPlugin))
+  }
+  if user32Candidates.isEmpty {
     let fetched = try user32Provider()
-    guard fetched.count == 32 else { throw NSError(domain: "User32", code: -2) }
-    try User32Store.save(fetched, account: acct, requireBiometrics: false)
-    user32 = fetched
+    guard fetched.count == 32 else {
+      throw NSError(
+        domain: "User32",
+        code: -2,
+        userInfo: [NSLocalizedDescriptionKey: "user32 must be 32 bytes"]
+      )
+    }
+    try User32Store.save(fetched, account: accountHint, requireBiometrics: false)
+    user32Candidates.append((account: accountHint, data: fetched))
+    NSLog("EmotionDetectionPlugin user32 provider fallback account=\(accountHint) bytes=\(fetched.count)")
   }
 
-  // Resolve shard lease if present and not expired
-  let candidates = [manifest.model_id, manifest.model_name, UserCodeUtils.sanitize(userName: userName)].compactMap { $0 }
-  let lease = ShardCache.activeShard(for: candidates)
-  let useShard = (manifest.shard_required ?? manifest.shardRequired) == true
-  let shardData = useShard ? lease?.shard : nil
-  let shardB64 = lease?.shardB64 ?? lease?.shard.base64EncodedString()
-  let aadAuth: String
-  if useShard, let s = shardB64, !s.isEmpty {
-    aadAuth = "\(manifest.aad)|shard:\(s)"
-  } else {
-    aadAuth = manifest.aad
+  var attempts: [String] = []
+  for candidate in user32Candidates {
+    let user32Hash = shortSHA256(candidate.data)
+    do {
+      let cek = try resolveCEKForUser32(
+        manifest: manifest,
+        effectiveModelId: effectiveModelId,
+        userName: userName,
+        user32: candidate.data
+      )
+      NSLog("EmotionDetectionPlugin CEK resolved account=\(candidate.account) u32=\(user32Hash)")
+      return cek
+    } catch {
+      attempts.append("account=\(candidate.account) u32=\(user32Hash) err=\(error)")
+    }
   }
 
-  let kek = deriveKEK(user32: user32, shard: shardData, aad: aadAuth, kdfInfo: manifest.kdf_info)
-  let cek = try unwrapCEK_fromManifest(wrappedCEK_B64: manifest.wrapped_cek_b64, kek: kek, aad: aadAuth)
-  return cek
+  throw NSError(
+    domain: "CEKAuth",
+    code: -5,
+    userInfo: [
+      NSLocalizedDescriptionKey: "Failed CEK unwrap; model=\(effectiveModelId) account=\(accountHint) attempts=\(attempts.joined(separator: " | "))"
+    ]
+  )
 }
