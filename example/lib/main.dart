@@ -127,6 +127,12 @@ class _MyAppState extends State<MyApp> {
         (env['EXAMPLE_USER_NAME'] ?? procEnv['EXAMPLE_USER_NAME'] ?? '').trim();
     final modelKey =
         (env['EXAMPLE_MODEL_KEY'] ?? procEnv['EXAMPLE_MODEL_KEY'] ?? '').trim();
+    final aadIOS = (env['EXAMPLE_MODEL_AAD_IOS'] ??
+            procEnv['EXAMPLE_MODEL_AAD_IOS'] ??
+            env['EXAMPLE_MODEL_AAD'] ??
+            procEnv['EXAMPLE_MODEL_AAD'] ??
+            '')
+        .trim();
     final aad =
         (env['EXAMPLE_MODEL_AAD'] ?? procEnv['EXAMPLE_MODEL_AAD'] ?? '').trim();
     final aadAndroid = (env['EXAMPLE_MODEL_AAD_ANDROID'] ??
@@ -144,6 +150,7 @@ class _MyAppState extends State<MyApp> {
       overrideBaseUrl: baseUrl.isEmpty ? null : baseUrl,
       userName: userName.isEmpty ? null : userName,
       modelKey: modelKey.isEmpty ? null : modelKey,
+      iosAad: aadIOS.isEmpty ? null : aadIOS,
       aad: aad.isEmpty ? null : aad,
       macosAad: aadMacOS.isEmpty ? null : aadMacOS,
       androidAad: aadAndroid.isEmpty ? null : aadAndroid,

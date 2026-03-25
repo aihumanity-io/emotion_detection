@@ -56,7 +56,7 @@ class EmotionMobilenet: MLBase {
             print("Using bundle: \(fw.bundlePath)")
             
             let currentUserName = UserCodeUtils.sanitize(userName: userName)
-            let baseCandidates = ["mobilenetv1_fer2024-11-06-08-48-50", "mobilenetv1_fer"]
+            let baseCandidates = ["mobilenetv1_fer", "mobilenetv1_fer2024-11-06-08-48-50"]
             var lastCandidateError: Error?
 
             for baseName in baseCandidates {

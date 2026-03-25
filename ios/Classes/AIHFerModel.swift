@@ -110,7 +110,7 @@ class AIHFerModel: MLBase {
             }
 
             let currentUserName = UserCodeUtils.sanitize(userName: userName)
-            let baseCandidates = ["aih_fer20250115", "aih_fer"]
+            let baseCandidates = ["aih_fer", "aih_fer20250115"]
             var lastCandidateError: Error?
 
             for baseName in baseCandidates {

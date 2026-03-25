@@ -20,6 +20,10 @@ const List<String> _exampleModelKeys = <String>[
 const List<String> _androidModelKeys = <String>[
   'mobilenetv1_fer2024-11-06-08-48-50',
 ];
+const String _exampleIOSAad = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD_IOS',
+  defaultValue: 'com.creataai.emotionsdk/ios',
+);
 const String _exampleAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD',
   defaultValue: 'com.creataai.emotionsdk/ios',
@@ -56,6 +60,7 @@ class ExampleSdkSecretModule {
     String? apiKeySecret,
     String? modelKey,
     List<String>? modelKeys,
+    String? iosAad,
     String? aad,
     String? macosAad,
     String? androidAad,
@@ -63,6 +68,7 @@ class ExampleSdkSecretModule {
     String? userName,
   })  : _apiKeyId = apiKeyId ?? _exampleSdkKeyId,
         _apiKeySecret = apiKeySecret ?? _exampleSdkKeySecret,
+        _iosAad = iosAad ?? aad ?? _exampleIOSAad,
         _aad = aad ?? _exampleAad,
         _macosAad = macosAad ?? _exampleMacOSAad,
         _androidAad = androidAad ?? _exampleAndroidAad,
@@ -80,6 +86,7 @@ class ExampleSdkSecretModule {
   final String _apiKeySecret;
   final String _modelKey;
   final List<String> _modelKeys;
+  final String _iosAad;
   final String _aad;
   final String _macosAad;
   final String _androidAad;
@@ -91,7 +98,7 @@ class ExampleSdkSecretModule {
       apiKeyId: _apiKeyId,
       apiKeySecret: _apiKeySecret,
       modelKey: _modelKey,
-      aad: (aadOverride ?? _aad).isEmpty ? null : (aadOverride ?? _aad),
+      aad: (aadOverride ?? _iosAad).isEmpty ? null : (aadOverride ?? _iosAad),
       overrideBaseUrl: _overrideBaseUrl.isEmpty ? null : _overrideBaseUrl,
     );
   }
@@ -112,7 +119,7 @@ class ExampleSdkSecretModule {
         apiKeyId: _apiKeyId,
         apiKeySecret: _apiKeySecret,
         modelKey: key,
-        aad: (aadOverride ?? _aad).isEmpty ? null : (aadOverride ?? _aad),
+        aad: (aadOverride ?? _iosAad).isEmpty ? null : (aadOverride ?? _iosAad),
         overrideBaseUrl: _overrideBaseUrl.isEmpty ? null : _overrideBaseUrl,
       );
       if (res != null) {
@@ -165,7 +172,10 @@ class ExampleSdkSecretModule {
     if (platform == TargetPlatform.macOS) {
       return _macosAad;
     }
-    return _aad; // iOS + macOS + others
+    if (platform == TargetPlatform.iOS) {
+      return _iosAad;
+    }
+    return _aad;
   }
 
   String _platformName(TargetPlatform platform) {
