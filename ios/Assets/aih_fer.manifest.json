@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "modelId": "aih_fer20250115",
+  "distributionMode": "unified",
+  "sourceKind": "directory",
+  "algo": "AES-256-GCM",
+  "ciphertextLen": 24868676,
+  "gcmIv": "d6K9uIJTrDErE5g-",
+  "aad": "com.creataai.emotionsdk/shared|model:aih_fer20250115",
+  "plainSha256": "I1RxpQ0QsGQd03V4CsnLDoJivvBFr3-ktbExwz-dkO4",
+  "cekId": "aih_fer20250115:v1",
+  "wrap": {
+    "type": "external"
+  }
+}

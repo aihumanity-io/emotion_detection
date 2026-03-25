@@ -1551,9 +1551,29 @@ private func resolveCEKForUser32(
       in: Bundle(for: EmotionDetectionPlugin.self)
     ) {
       do {
+        let expectedIds = Set([
+          effectiveModelId,
+          manifest.modelId,
+          manifest.model_id,
+          manifest.model_name
+        ].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+        if !expectedIds.isEmpty && !expectedIds.contains(license.modelId) {
+          throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "License modelId mismatch"])
+        }
+        if let expectedHash = manifest.plainSha256, !expectedHash.isEmpty, license.plainSha256 != expectedHash {
+          throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "License plainSha256 mismatch"])
+        }
+        if let algo = manifest.algo, !algo.isEmpty, license.algo != algo {
+          throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "License algo mismatch"])
+        }
+        if let expRaw = license.expiresAt, !expRaw.isEmpty {
+          guard let exp = parseISO8601(expRaw), exp > Date() else {
+            throw NSError(domain: "CEKAuth", code: -8, userInfo: [NSLocalizedDescriptionKey: "License expired"])
+          }
+        }
         let shardData = license.wrap.shardUsed ? lease?.shard : nil
         let cek = try unwrapCEKFromLicense(user32: user32, shard: shardData, license: license)
-        NSLog("EmotionDetectionPlugin CEK license unwrap ok model=\(effectiveModelId) shardUsed=\(license.wrap.shardUsed)")
+        NSLog("EmotionDetectionPlugin CEK license unwrap ok model=\(effectiveModelId) licenseModel=\(license.modelId) shardUsed=\(license.wrap.shardUsed)")
         return cek
       } catch {
         NSLog("EmotionDetectionPlugin CEK license unwrap failed model=\(effectiveModelId); fallback to legacy: \(error)")
