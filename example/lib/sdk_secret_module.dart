@@ -24,6 +24,10 @@ const String _exampleAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD',
   defaultValue: 'com.creataai.emotionsdk/ios',
 );
+const String _exampleMacOSAad = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD_MACOS',
+  defaultValue: 'com.creataai.emotionsdk/ios',
+);
 const String _exampleAndroidAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD_ANDROID',
   defaultValue: 'com.creataai.emotionsdk/android',
@@ -53,12 +57,14 @@ class ExampleSdkSecretModule {
     String? modelKey,
     List<String>? modelKeys,
     String? aad,
+    String? macosAad,
     String? androidAad,
     String? overrideBaseUrl,
     String? userName,
   })  : _apiKeyId = apiKeyId ?? _exampleSdkKeyId,
         _apiKeySecret = apiKeySecret ?? _exampleSdkKeySecret,
         _aad = aad ?? _exampleAad,
+        _macosAad = macosAad ?? _exampleMacOSAad,
         _androidAad = androidAad ?? _exampleAndroidAad,
         _overrideBaseUrl = overrideBaseUrl ?? _exampleOverrideBase,
         _userName = userName ?? _exampleUserName,
@@ -75,6 +81,7 @@ class ExampleSdkSecretModule {
   final String _modelKey;
   final List<String> _modelKeys;
   final String _aad;
+  final String _macosAad;
   final String _androidAad;
   final String _overrideBaseUrl;
   final String _userName;
@@ -93,9 +100,13 @@ class ExampleSdkSecretModule {
   /// payloads in order. Each call only includes the shard for the requested
   /// model key.
   Future<List<CekSecretResult>> fetchAllCekSecrets(
-      {String? aadOverride, List<String>? modelKeys}) async {
+      {String? aadOverride,
+      List<String>? modelKeys,
+      TargetPlatform? targetPlatform}) async {
     final results = <CekSecretResult>[];
     final keys = modelKeys ?? _modelKeys;
+    final platform =
+        _platformName(targetPlatform ?? defaultTargetPlatform).toLowerCase();
     for (final key in keys) {
       final res = await CekSecretClient.fetchCekSecret(
         apiKeyId: _apiKeyId,
@@ -105,7 +116,22 @@ class ExampleSdkSecretModule {
         overrideBaseUrl: _overrideBaseUrl.isEmpty ? null : _overrideBaseUrl,
       );
       if (res != null) {
-        results.add(CekSecretResult(modelKey: key, payload: res));
+        final payload = Map<String, dynamic>.from(res);
+        final existingLicense = extractLicense(payload, modelKey: key);
+        if (existingLicense == null || existingLicense.isEmpty) {
+          final modelIdForLicense = extractModelKey(payload) ?? key;
+          final fetchedLicense = await CekSecretClient.fetchModelLicense(
+            apiKeyId: _apiKeyId,
+            apiKeySecret: _apiKeySecret,
+            modelId: modelIdForLicense,
+            platform: platform,
+            overrideBaseUrl: _overrideBaseUrl.isEmpty ? null : _overrideBaseUrl,
+          );
+          if (fetchedLicense != null && fetchedLicense.isNotEmpty) {
+            payload['license'] = fetchedLicense;
+          }
+        }
+        results.add(CekSecretResult(modelKey: key, payload: payload));
       }
     }
     return results;
@@ -136,7 +162,23 @@ class ExampleSdkSecretModule {
     if (platform == TargetPlatform.android) {
       return _androidAad;
     }
+    if (platform == TargetPlatform.macOS) {
+      return _macosAad;
+    }
     return _aad; // iOS + macOS + others
+  }
+
+  String _platformName(TargetPlatform platform) {
+    switch (platform) {
+      case TargetPlatform.android:
+        return 'android';
+      case TargetPlatform.iOS:
+        return 'ios';
+      case TargetPlatform.macOS:
+        return 'macos';
+      default:
+        return 'ios';
+    }
   }
 
   /// Returns the AAD to request based on platform; callers should surface 403

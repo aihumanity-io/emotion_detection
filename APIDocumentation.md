@@ -182,7 +182,9 @@ Usage notes
 Utility for calling `GET /sdk/cek-secret` with your SDK key pair. Signs the
 request using `Hmac(sha256)` and returns the decoded JSON payload when the
 response is `200`. The service may return fields such as `userSecretB64` (user
-code), `cekShardB64` (server-held shard), and `expiresAt` (ms epoch).
+code), `cekShardB64` (server-held shard), `expiresAt` (ms epoch), and unified
+license fields (`license` or `licenseJson`) when using unified model
+distribution.
 
 ```dart
 final cek = await CekSecretClient.fetchCekSecret(
@@ -217,6 +219,7 @@ import 'package:emotion_detection/emotion_detection.dart';
 final userCode = CekSecretUtils.extractUserCode(payload, modelKey: 'model_a');
 final shardB64 = CekSecretUtils.extractShard(payload, modelKey: 'model_a');
 final expires  = CekSecretUtils.extractExpiresAtMs(payload, modelKey: 'model_a');
+final license  = CekSecretUtils.extractLicense(payload, modelKey: 'model_a');
 final entries  = CekSecretUtils.extractModelSecrets(payload);
 
 // Optional: normalize URL-safe base64 to standard
@@ -225,6 +228,8 @@ final normalized = CekSecretUtils.normalizeBase64(shardB64 ?? '');
 
 Returned `entries` contain `modelKey`, `shardB64`, optional `expiresAtMs`, and
 `shardRequired`. These helpers are platform-agnostic and safe to use in apps.
+`extractLicense` supports object payloads (`license`, `licenseDoc`) and JSON
+string payloads (`licenseJson`, `license_json`).
 
 ### `UserCodeChannel.saveUserCode`
 
@@ -265,6 +270,36 @@ present, the iOS loader refuses to unwrap the CEK until a fresh shard is set.
 > received (do not normalize/trim/pad). The loader uses the original base64 in
 > its AAD when deriving the KEK; altering it will trigger CryptoKit error 3
 > during decryption.
+
+### `ModelRuntime.setModelLicense`
+
+Registers unified-license metadata at runtime for a model id (or alias). Use
+this when the encrypted bundle is unified and CEK unwrap requires license data
+from backend.
+
+```dart
+await ModelRuntime.setModelLicense(
+  modelId: 'example_model',
+  license: cekPayload['license'] as Map<String, dynamic>,
+);
+```
+
+Call `ModelRuntime.clearModelLicense(modelId)` when rotating users/accounts.
+The SDK sample now stores licenses for all model aliases returned by backend.
+
+### Unified Encryption Backend Payload (Required)
+
+For unified model distribution, backend response should include:
+
+- `userCodeB64` (or `userSecretB64`): base64-encoded 32-byte user code.
+- `license` object (or `licenseJson` string): unified license document
+  containing at least `modelId`, `algo`, `plainSha256`, `wrappedCek`, `wrap`.
+- Optional shard fields (`cekShardB64`, `expiresAt`) if wrap policy requires
+  shard (`wrap.shardUsed` true or manifest shard-required).
+
+Per-developer flow remains supported with current fields (`wrapped_cek_b64` +
+`kdf_info` path and/or shard fields). A single backend endpoint can return
+either shape; client auto-detects by manifest and available license data.
 
 ### `ModelRuntime` lifecycle (iOS implemented)
 

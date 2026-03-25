@@ -133,6 +133,10 @@ class _MyAppState extends State<MyApp> {
             procEnv['EXAMPLE_MODEL_AAD_ANDROID'] ??
             '')
         .trim();
+    final aadMacOS = (env['EXAMPLE_MODEL_AAD_MACOS'] ??
+            procEnv['EXAMPLE_MODEL_AAD_MACOS'] ??
+            '')
+        .trim();
 
     _sdkSecretModule = ExampleSdkSecretModule(
       apiKeyId: apiKeyId.isEmpty ? null : apiKeyId,
@@ -141,6 +145,7 @@ class _MyAppState extends State<MyApp> {
       userName: userName.isEmpty ? null : userName,
       modelKey: modelKey.isEmpty ? null : modelKey,
       aad: aad.isEmpty ? null : aad,
+      macosAad: aadMacOS.isEmpty ? null : aadMacOS,
       androidAad: aadAndroid.isEmpty ? null : aadAndroid,
     );
     if (Platform.isAndroid) {
@@ -296,6 +301,7 @@ class _MyAppState extends State<MyApp> {
     final results = await _sdkSecretModule.fetchAllCekSecrets(
       aadOverride: aad,
       modelKeys: keys,
+      targetPlatform: defaultTargetPlatform,
     );
     String status = 'fetchCekSecret returned null (see logs).';
     if (results.isNotEmpty) {
