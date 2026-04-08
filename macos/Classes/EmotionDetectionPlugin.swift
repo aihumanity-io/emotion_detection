@@ -188,45 +188,8 @@ extension EmotionDetectionPlugin: FlutterStreamHandler, AVCaptureVideoDataOutput
       // Detect/crop face
       let faceRect = detectFace(in: img) ?? centerSquare(in: img)
       guard let crop = img.cropping(to: faceRect) else { return }
-      guard let facePB = crop.pixelBuffer(width: 224, height: 224, orientation: .up) else { return }
-      let model = try ModelCache.shared.model(for: currentModelId)
-      // Pick first image input name dynamically
-      let md = model.modelDescription
-      let inputName: String = {
-        for (name, desc) in md.inputDescriptionsByName { if desc.type == .image { return name } }
-        return "input_1"
-      }()
-      let provider = try MLDictionaryFeatureProvider(dictionary: [inputName: MLFeatureValue(pixelBuffer: facePB)])
-      let out = try model.prediction(from: provider)
-
-      // Build probability map from available outputs
-      var map: [String: Double] = [:]
-      // Prefer dictionary (class probabilities) if present
-      for name in out.featureNames {
-        if let fv = out.featureValue(for: name) {
-          if fv.type == .dictionary {
-            let dict = fv.dictionaryValue
-            for (k, v) in dict { if let ks = k as? String { map[ks] = v.doubleValue } }
-            if !map.isEmpty { break }
-          }
-        }
-      }
-      if map.isEmpty {
-        // Try multi-array fallback (e.g., 'Identity')
-        let maNames = ["Identity", "output", "probabilities"]
-        var arr: [Float]? = nil
-        for n in maNames {
-          if let m = out.featureValue(for: n)?.multiArrayValue { arr = m.toFloatArray(); break }
-        }
-        if arr == nil {
-          // pick first multiArray output if any
-          for name in out.featureNames { if let m = out.featureValue(for: name)?.multiArrayValue { arr = m.toFloatArray(); break } }
-        }
-        if let scores = arr {
-          let labels = ["Anger","Disgust","Fear","Happiness","Neutral","Sadness","Surprise"]
-          for i in 0..<min(scores.count, labels.count) { map[labels[i]] = Double(scores[i]) }
-        }
-      }
+      let runtimeModel = try ModelCache.shared.model(for: currentModelId)
+      let map = try predictDistribution(runtimeModel: runtimeModel, crop: crop)
       if !map.isEmpty { cameraEventSink?(map) }
     } catch {
       // Keep full error for root-cause debugging (enum/error codes often hidden in localizedDescription).
@@ -404,25 +367,69 @@ extension EmotionDetectionPlugin {
         return result(FlutterError(code: "crop_error", message: "failed to crop face", details: nil))
       }
 
-      // Load model lazily
-      let model = try ModelCache.shared.model(for: modelId)
-
-      // Convert to pixel buffer and run prediction
-      guard let pb = crop.pixelBuffer(width: 224, height: 224, orientation: .up) else {
-        return result(FlutterError(code: "pixelbuffer_error", message: "could not build pixel buffer", details: nil))
-      }
-      let provider = try MLDictionaryFeatureProvider(dictionary: ["input_1": MLFeatureValue(pixelBuffer: pb)])
-      let out = try model.prediction(from: provider)
-      guard let m = out.featureValue(for: "Identity")?.multiArrayValue else {
-        return result([:])
-      }
-      let scores = m.toFloatArray()
-      let labels = ["Anger","Disgust","Fear","Happiness","Neutral","Sadness","Surprise"]
-      var map: [String: Double] = [:]
-      for i in 0..<min(scores.count, labels.count) { map[labels[i]] = Double(scores[i]) }
+      let runtimeModel = try ModelCache.shared.model(for: modelId)
+      let map = try predictDistribution(runtimeModel: runtimeModel, crop: crop)
       result(map)
     } catch {
       result(FlutterError(code: "predict_error", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func predictDistribution(runtimeModel: RuntimeModel, crop: CGImage) throws -> [String: Double] {
+    switch runtimeModel {
+    case .onnx(let model):
+      return try model.predict(faceImage: crop)
+    case .coreML(let model):
+      guard let pb = crop.pixelBuffer(width: 224, height: 224, orientation: .up) else {
+        throw NSError(
+          domain: "ModelLoad",
+          code: -31,
+          userInfo: [NSLocalizedDescriptionKey: "could not build pixel buffer"]
+        )
+      }
+
+      let md = model.modelDescription
+      let inputName: String = {
+        for (name, desc) in md.inputDescriptionsByName {
+          if desc.type == .image { return name }
+        }
+        return "input_1"
+      }()
+      let provider = try MLDictionaryFeatureProvider(dictionary: [inputName: MLFeatureValue(pixelBuffer: pb)])
+      let out = try model.prediction(from: provider)
+
+      var map: [String: Double] = [:]
+      for name in out.featureNames {
+        if let fv = out.featureValue(for: name), fv.type == .dictionary {
+          let dict = fv.dictionaryValue
+          for (k, v) in dict {
+            if let ks = k as? String { map[ks] = v.doubleValue }
+          }
+          if !map.isEmpty { break }
+        }
+      }
+      if !map.isEmpty { return map }
+
+      let maNames = ["Identity", "output", "probabilities"]
+      var arr: [Float]? = nil
+      for n in maNames {
+        if let m = out.featureValue(for: n)?.multiArrayValue {
+          arr = m.toFloatArray()
+          break
+        }
+      }
+      if arr == nil {
+        for n in out.featureNames {
+          if let m = out.featureValue(for: n)?.multiArrayValue {
+            arr = m.toFloatArray()
+            break
+          }
+        }
+      }
+      guard let scores = arr else { return [:] }
+      let labels = ["Anger", "Disgust", "Fear", "Happiness", "Neutral", "Sadness", "Surprise"]
+      for i in 0..<min(scores.count, labels.count) { map[labels[i]] = Double(scores[i]) }
+      return map
     }
   }
 
@@ -511,12 +518,22 @@ extension EmotionDetectionPlugin {
 
 // MARK: - Model cache and loading
 
+enum RuntimeModel {
+  case coreML(MLModel)
+  case onnx(OnnxEmotionModel)
+
+  var isOnnx: Bool {
+    if case .onnx = self { return true }
+    return false
+  }
+}
+
 final class ModelCache {
   static let shared = ModelCache()
-  private var cache: [String: MLModel] = [:]
+  private var cache: [String: RuntimeModel] = [:]
   private let lock = NSLock()
 
-  func model(for modelId: String) throws -> MLModel {
+  func model(for modelId: String) throws -> RuntimeModel {
     lock.lock(); defer { lock.unlock() }
     if let m = cache[modelId] { return m }
     let bundle = Bundle(for: EmotionDetectionPlugin.self)
@@ -545,26 +562,53 @@ final class ModelCache {
       user32Provider: { try UserCodeUtils.loadUser32(userName: userName, modelIds: modelIdentifierCandidates) }
     )
     NSLog("EmotionDetectionPlugin CEK ready for modelId=\(modelId) bytes=\(cek.count)")
-    let model = try EncryptedModelLoader.loadFromBundle(
+    let runtimeModel = try EncryptedModelLoader.loadFromBundle(
       baseName: baseName,
       configuration: MLModelConfiguration(),
       framework: bundle,
       obtainKey: { SymmetricKey(data: cek) }
     )
-    NSLog("EmotionDetectionPlugin model ready modelId=\(modelId) baseName=\(baseName)")
-    cache[modelId] = model
-    return model
+    let backendName = (runtimeModel.isOnnx ? "onnx" : "coreml")
+    NSLog("EmotionDetectionPlugin model ready modelId=\(modelId) baseName=\(baseName) backend=\(backendName)")
+    cache[modelId] = runtimeModel
+    return runtimeModel
   }
 
   private func resolveModelBaseName(for modelId: String, in bundle: Bundle) -> String {
-    let candidates: [String]
-    if modelId.contains("aih_fer") {
-      candidates = ["aih_fer", "aih_fer20250115"]
-    } else if modelId.contains("mobilenetv1_fer") {
-      candidates = ["mobilenetv1_fer", "mobilenetv1_fer2024-11-06-08-48-50"]
-    } else {
-      candidates = ["mobilenetv1_fer", "mobilenetv1_fer2024-11-06-08-48-50"]
+    let normalizedModelId = modelId.trimmingCharacters(in: .whitespacesAndNewlines)
+    var candidates = [String]()
+    func addCandidate(_ value: String?) {
+      guard let raw = value?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return }
+      if !candidates.contains(raw) { candidates.append(raw) }
     }
+
+    addCandidate(normalizedModelId)
+
+    // Legacy shard alias -> base id (e.g. foo_v2024-...-shard -> foo2024-...)
+    if normalizedModelId.hasSuffix("-shard"),
+       let vRange = normalizedModelId.range(of: "_v") {
+      let prefix = String(normalizedModelId[..<vRange.lowerBound])
+      let tsEnd = normalizedModelId.index(normalizedModelId.endIndex, offsetBy: -"-shard".count)
+      if tsEnd > vRange.upperBound {
+        let timestamp = String(normalizedModelId[vRange.upperBound..<tsEnd])
+        let parts = timestamp.split(separator: "-")
+        if parts.count == 6 {
+          addCandidate("\(prefix)\(timestamp)")
+        }
+      }
+    }
+
+    if normalizedModelId.contains("aih_fer") {
+      addCandidate("aih_fer")
+      addCandidate("aih_fer20250115")
+    }
+    if normalizedModelId.contains("mobilenetv1_fer") {
+      addCandidate("mobilenetv1_fer")
+      addCandidate("mobilenetv1_fer2024-11-06-08-48-50")
+    }
+    // Safe fallback defaults.
+    addCandidate("mobilenetv1_fer")
+    addCandidate("mobilenetv1_fer2024-11-06-08-48-50")
 
     for candidate in candidates {
       let hasManifest = (try? FileIO.anyBundleURL(name: candidate, ext: "manifest.json", prefer: bundle)) != nil
@@ -967,6 +1011,7 @@ struct ModelManifest: Decodable {
 
   // Newer fields (kept for compatibility with iOS logic).
   let distributionMode: String?
+  let sourceKind: String?
   let modelId: String?
   let algo: String?
   let ciphertextLen: Int?
@@ -1005,6 +1050,7 @@ struct ModelManifest: Decodable {
     case expiry_epoch_ms
 
     case distributionMode
+    case sourceKind
     case modelId
     case algo
     case ciphertextLen
@@ -1042,6 +1088,7 @@ struct ModelManifest: Decodable {
     expiry_epoch_ms = try c.decodeIfPresent(Int.self, forKey: .expiry_epoch_ms)
 
     distributionMode = try c.decodeIfPresent(String.self, forKey: .distributionMode)
+    sourceKind = try c.decodeIfPresent(String.self, forKey: .sourceKind)
     modelId = try c.decodeIfPresent(String.self, forKey: .modelId)
     let algoValue = try c.decodeIfPresent(String.self, forKey: .algo)
     let algorithmValue = try c.decodeIfPresent(String.self, forKey: .algorithm)
@@ -1183,7 +1230,28 @@ struct FileIO {
 }
 enum EncryptedLoadError: Error { case integrityFailed }
 struct EncryptedModelLoader {
-  static func loadFromBundle(baseName: String, configuration: MLModelConfiguration, framework: Bundle, obtainKey: () throws -> SymmetricKey) throws -> MLModel {
+  private static func resolvedSourceKind(_ manifest: ModelManifest) -> String {
+    let raw = manifest.sourceKind?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if let raw, !raw.isEmpty { return raw }
+    return "directory"
+  }
+
+  private static func inferredFileExtension(baseName: String, manifest: ModelManifest) -> String {
+    let ids = [
+      baseName,
+      manifest.modelId,
+      manifest.model_id,
+      manifest.model_name
+    ].compactMap { $0?.lowercased() }
+
+    for id in ids {
+      if id.hasSuffix(".onnx") || id.hasSuffix("_onnx") { return "onnx" }
+      if id.hasSuffix(".mlmodel") || id.hasSuffix("_mlmodel") { return "mlmodel" }
+    }
+    return "bin"
+  }
+
+  static func loadFromBundle(baseName: String, configuration: MLModelConfiguration, framework: Bundle, obtainKey: () throws -> SymmetricKey) throws -> RuntimeModel {
     let manifestURL = try FileIO.anyBundleURL(name: baseName, ext: "manifest.json", prefer: framework)
     let encURL = try FileIO.anyBundleURL(name: baseName, ext: "enc", prefer: framework)
     NSLog("EmotionDetectionPlugin decrypt start base=\(baseName) manifest=\(manifestURL.lastPathComponent) enc=\(encURL.lastPathComponent)")
@@ -1211,12 +1279,34 @@ struct EncryptedModelLoader {
       let calc = ModelCrypto.sha256Base64URL(zipData)
       guard calc == plainSha else { throw EncryptedLoadError.integrityFailed }
     }
+    let sourceKind = resolvedSourceKind(manifest)
+    if sourceKind == "file" {
+      NSLog("EmotionDetectionPlugin decrypt ok base=\(baseName) fileBytes=\(zipData.count)")
+      let ext = inferredFileExtension(baseName: baseName, manifest: manifest)
+      let work = try FileIO.tempDir("model_dec_file_\(baseName)")
+      let modelURL = work.appendingPathComponent("model_\(baseName).\(ext)")
+      try zipData.write(to: modelURL, options: .atomic)
+      if ext == "onnx" {
+        NSLog("EmotionDetectionPlugin initializing onnx runtime base=\(baseName) modelId=\(manifest.resolvedModelId)")
+        return .onnx(try OnnxEmotionModel(modelURL: modelURL))
+      }
+      let compiled = try MLModel.compileModel(at: modelURL)
+      NSLog("EmotionDetectionPlugin compile ok base=\(baseName) file=\(modelURL.lastPathComponent) compiled=\(compiled.lastPathComponent)")
+      return .coreML(try MLModel(contentsOf: compiled, configuration: configuration))
+    }
+    if sourceKind != "directory" {
+      throw NSError(
+        domain: "ModelLoad",
+        code: -21,
+        userInfo: [NSLocalizedDescriptionKey: "Unsupported sourceKind '\(sourceKind)' for modelId=\(manifest.resolvedModelId)"]
+      )
+    }
     NSLog("EmotionDetectionPlugin decrypt ok base=\(baseName) zipBytes=\(zipData.count)")
     let work = try FileIO.tempDir("model_dec_\(baseName)"); let zipOut = work.appendingPathComponent("model_\(baseName).zip"); try zipData.write(to: zipOut, options: .atomic); try FileIO.unzip(zipOut, to: work)
     NSLog("EmotionDetectionPlugin unzip ok base=\(baseName) dir=\(work.path)")
     let pkg = try FileIO.findMLPackage(in: work); let compiled = try MLModel.compileModel(at: pkg)
     NSLog("EmotionDetectionPlugin compile ok base=\(baseName) compiled=\(compiled.lastPathComponent)")
-    return try MLModel(contentsOf: compiled, configuration: configuration)
+    return .coreML(try MLModel(contentsOf: compiled, configuration: configuration))
   }
 }
 

@@ -18,9 +18,16 @@ import 'package:emotion_detection/native/user_code_channel.dart';
 import 'package:emotion_detection/emotion_detection.dart';
 import 'package:emotion_detection_example/sdk_secret_module.dart';
 
+const String _modelKeyFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_KEY',
+  defaultValue: '',
+);
+
 const Map<String, String> _modelAccountIds = <String, String>{
   'aih_fer': 'aih_fer_v2025-01-15-shard',
   'aih_fer20250115': 'aih_fer_v2025-01-15-shard',
+  'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx':
+      'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx',
   'mobilenetv1_fer': 'mobilenetv1_fer_v2024-11-06-08-48-50-shard',
   'mobilenetv1_fer2024-11-06-08-48-50':
       'mobilenetv1_fer_v2024-11-06-08-48-50-shard',
@@ -171,12 +178,16 @@ void main() {
       await dotenv.load(fileName: '.env');
     } catch (_) {}
     final env = dotenv.env;
+    final preferredModelKey = _modelKeyFromDefine.trim().isNotEmpty
+        ? _modelKeyFromDefine.trim()
+        : (env['EXAMPLE_MODEL_KEY'] ?? '').trim();
     final module = ExampleSdkSecretModule(
       apiKeyId: env['SDK_KEY_ID'],
       apiKeySecret: env['SDK_KEY_SECRET'],
       overrideBaseUrl: env['EXAMPLE_SERVER_BASE_URL'],
       userName: env['EXAMPLE_USER_NAME'],
-      modelKey: env['EXAMPLE_MODEL_KEY'],
+      modelKey: preferredModelKey.isEmpty ? env['EXAMPLE_MODEL_KEY'] : preferredModelKey,
+      modelKeys: preferredModelKey.isEmpty ? null : <String>[preferredModelKey],
       aad: env['EXAMPLE_MODEL_AAD'],
       iosAad: env['EXAMPLE_MODEL_AAD_IOS'],
       macosAad: env['EXAMPLE_MODEL_AAD_MACOS'],
@@ -191,7 +202,7 @@ void main() {
     final keys = module.modelKeysForPlatform(defaultTargetPlatform);
     expect(keys.isNotEmpty, true);
     final modelKey = keys.firstWhere(
-      (k) => k.contains('mobilenetv1_fer'),
+      (k) => preferredModelKey.isNotEmpty && k == preferredModelKey,
       orElse: () => keys.first,
     );
 

@@ -40,6 +40,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  static const String _kNewOnnxModelId =
+      'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx';
   String _platformVersion = 'Unknown';
   final _emotionDetectionPlugin = EmotionDetection();
   EmotionDetectorViewController controller = EmotionDetectorViewController();
@@ -59,6 +61,8 @@ class _MyAppState extends State<MyApp> {
   static Map<String, String> _modelAccountIds = {
     'aih_fer': 'aih_fer_v2025-01-15-shard',
     'aih_fer20250115': 'aih_fer_v2025-01-15-shard',
+    'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx':
+        'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx',
     'mobilenetv1_fer': 'mobilenetv1_fer_v2024-11-06-08-48-50-shard',
     'mobilenetv1_fer2024-11-06-08-48-50':
         'mobilenetv1_fer_v2024-11-06-08-48-50-shard',
@@ -108,6 +112,19 @@ class _MyAppState extends State<MyApp> {
     final derived = _deriveModelShardAlias(modelKey);
     if (derived != null && derived.isNotEmpty) return derived;
     return modelKey;
+  }
+
+  String _activeMacModelId() {
+    final preferred = _sdkSecretModule.modelKey.trim();
+    if (preferred.isNotEmpty) return _runtimeModelIdForKey(preferred);
+    final keys = _sdkSecretModule.modelKeysForPlatform(defaultTargetPlatform);
+    if (keys.contains(_kNewOnnxModelId)) {
+      return _runtimeModelIdForKey(_kNewOnnxModelId);
+    }
+    if (keys.isNotEmpty) {
+      return _runtimeModelIdForKey(keys.first);
+    }
+    return _runtimeModelIdForKey('mobilenetv1_fer');
   }
 
   @override
@@ -512,7 +529,7 @@ class _MyAppState extends State<MyApp> {
       if (file == null) return;
       final Uint8List bytes = await file.readAsBytes();
       _ensureModelRuntimeChannel();
-      final modelId = _runtimeModelIdForKey('mobilenetv1_fer');
+      final modelId = _activeMacModelId();
       final out = await ModelRuntime.predict(modelId, {'imageBytes': bytes});
       if (out.isEmpty) {
         setState(() {
@@ -543,7 +560,7 @@ class _MyAppState extends State<MyApp> {
   void _startMacCamera() {
     try {
       final ed = EmotionDetection();
-      final modelId = _runtimeModelIdForKey('mobilenetv1_fer');
+      final modelId = _activeMacModelId();
       ed.macShowCameraPreview(modelId: modelId);
       _macCamSub = ed.macCameraStream(modelId: modelId).listen((dist) {
         String best = '';
