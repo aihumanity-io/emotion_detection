@@ -19,7 +19,7 @@ class KeystorePrefsStore(
     context: Context,
     private val alias: String = "tlabs.lic.aes",
     prefsName: String = "lic_store"
-) : SecretStore {
+) : SecretStore, PrefixRemovableSecretStore {
 
     private val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
     private fun ensureKey(): SecretKey {
@@ -80,6 +80,7 @@ class KeystorePrefsStore(
     override fun get(key: String): ByteArray? {
         val packed = prefs.getString(key, null) ?: return null
         val parts = packed.split(".")
+        if (parts.size != 2) return null
         val iv = Base64.decode(parts[0], Base64.NO_WRAP or Base64.URL_SAFE)
         val ctTag = Base64.decode(parts[1], Base64.NO_WRAP or Base64.URL_SAFE)
         val k = ensureKey()
@@ -90,4 +91,15 @@ class KeystorePrefsStore(
     }
 
     override fun remove(key: String) { prefs.edit().remove(key).apply() }
+
+    override fun removeByPrefix(prefix: String) {
+        if (prefix.isEmpty()) return
+        val editor = prefs.edit()
+        for (key in prefs.all.keys) {
+            if (key.startsWith(prefix)) {
+                editor.remove(key)
+            }
+        }
+        editor.apply()
+    }
 }

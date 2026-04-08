@@ -6,3 +6,7 @@ interface SecretStore {
     fun get(key: String): ByteArray?
     fun remove(key: String)
 }
+
+interface PrefixRemovableSecretStore {
+    fun removeByPrefix(prefix: String)
+}

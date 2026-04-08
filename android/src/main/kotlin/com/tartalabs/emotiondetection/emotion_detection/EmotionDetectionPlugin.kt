@@ -16,6 +16,7 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import com.tartalabs.crypto.LicenseManager
 import android.util.Base64
+import org.json.JSONObject
 
 val modelId = "mobilenetv1_fer2024-11-06-08-48-50"
 /** EmotionDetectionPlugin */
@@ -100,6 +101,7 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
 
     } else if(call.method == "setUserCode") {
       val userCodeB64 = call.argument<String>("userCodeB64")
+      val modelIdArg = call.argument<String>("modelId")
       if (userCodeB64.isNullOrBlank()) {
         result.error("invalid_args", "userCodeB64 is required", null)
         return
@@ -110,23 +112,25 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
           result.error("invalid_length", "userCode must be 32 bytes", null)
           return
         }
-        licMgr.saveUserCode(decoded)
+        licMgr.saveUserCode(decoded, modelIdArg)
         result.success(null)
       } catch (e: IllegalArgumentException) {
         result.error("invalid_base64", "Failed to decode userCodeB64", e.localizedMessage)
       }
     } else if(call.method == "clearUserCode") {
-      licMgr.clearSecrets()
+      val modelIdArg = call.argument<String>("modelId")
+      licMgr.clearUserCode(modelIdArg)
       result.success(null)
     } else if(call.method == "setKeyShard") {
       val shardB64 = call.argument<String>("keyShardB64")
+      val modelIdArg = call.argument<String>("modelId")
       if (shardB64.isNullOrBlank()) {
         result.error("invalid_args", "keyShardB64 is required", null)
         return
       }
       try {
         var decoded: ByteArray? = null
-        val trimmed = shardB64.trim()
+        val trimmed: String = shardB64.trim()
         try {
           decoded = Base64.decode(trimmed, Base64.NO_WRAP)
         } catch (_: IllegalArgumentException) {
@@ -148,14 +152,46 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
           result.error("invalid_length", "shard must be non-empty", null)
           return
         }
-        licMgr.saveShard(decoded)
+        licMgr.saveShard(decoded, modelIdArg)
         result.success(null)
       } catch (e: IllegalArgumentException) {
         result.error("invalid_base64", "Failed to decode keyShardB64", e.localizedMessage)
       }
     } else if(call.method == "clearKeyShard") {
-      store.remove(keys.shard)
-      store.remove(keys.deviceWrappedCek)
+      val modelIdArg = call.argument<String>("modelId")
+      licMgr.clearShard(modelIdArg)
+      result.success(null)
+    } else if (call.method == "setModelLicense") {
+      val modelIdArg = call.argument<String>("modelId")
+      if (modelIdArg.isNullOrBlank()) {
+        result.error("invalid_args", "modelId is required", null)
+        return
+      }
+      val licenseJson = call.argument<String>("licenseJson")
+      @Suppress("UNCHECKED_CAST")
+      val licenseMap = call.argument<HashMap<String, Any?>>("license")
+      val payload: String = when {
+        !licenseJson.isNullOrBlank() -> licenseJson
+        licenseMap != null -> JSONObject(licenseMap as Map<*, *>).toString()
+        else -> ""
+      }
+      if (payload.isBlank()) {
+        result.error("invalid_args", "license or licenseJson is required", null)
+        return
+      }
+      try {
+        licMgr.saveModelLicense(modelIdArg, payload)
+        result.success(null)
+      } catch (e: Exception) {
+        result.error("license_error", e.message, e.localizedMessage)
+      }
+    } else if (call.method == "clearModelLicense") {
+      val modelIdArg = call.argument<String>("modelId")
+      if (modelIdArg.isNullOrBlank()) {
+        result.error("invalid_args", "modelId is required", null)
+        return
+      }
+      licMgr.clearModelLicense(modelIdArg)
       result.success(null)
     } else if (call.method == "registerModel") {
       val modelId = call.argument<String>("modelId") ?: run {
@@ -180,7 +216,6 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
       val modelId = call.argument<String>("modelId") ?: run {
         result.error("invalid_args", "modelId is required", null); return
       }
-      val inputs = call.argument<Map<String, Any>>("inputs") ?: emptyMap()
       try {
         val predictor = ensureModel(modelId)
         val emotionResult = predictor.handlePrediction(call, result)
@@ -232,7 +267,7 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
     Log.i(TAG, "loading manifest: $manifestName for modelId=$modelId")
     try {
       val manifestJson = _appContext.assets.open(manifestName).bufferedReader().use { it.readText() }
-      val dec = licMgr.openModel(manifestJson = manifestJson, verify = true)
+      val dec = licMgr.openModel(manifestJson = manifestJson, modelBase = modelBase, verify = true)
       FileInputStream(dec).channel.use { ch ->
         val mapped = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size())
         models[modelId] = mapped
