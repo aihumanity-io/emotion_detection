@@ -176,6 +176,7 @@ struct Manifest: Decodable {
 
     // New unified/per-dev fields
     let distributionMode: String?
+    let sourceKind: String?
     let modelId: String?
     let algo: String?
     let ciphertextLen: Int?
@@ -208,6 +209,7 @@ struct Manifest: Decodable {
         case aad
 
         case distributionMode
+        case sourceKind
         case modelId
         case algo
         case algorithm
@@ -236,6 +238,7 @@ struct Manifest: Decodable {
         aad = try c.decodeIfPresent(String.self, forKey: .aad) ?? ""
 
         distributionMode = try c.decodeIfPresent(String.self, forKey: .distributionMode)
+        sourceKind = try c.decodeIfPresent(String.self, forKey: .sourceKind)
         modelId = try c.decodeIfPresent(String.self, forKey: .modelId)
         let algoValue = try c.decodeIfPresent(String.self, forKey: .algo)
         let algorithmValue = try c.decodeIfPresent(String.self, forKey: .algorithm)

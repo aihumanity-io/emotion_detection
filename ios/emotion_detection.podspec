@@ -14,8 +14,10 @@ A new Flutter plugin project.
   s.author           = { 'David Chiu' => 'fdchiu@@gmail.com' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
+  s.static_framework = true
   s.dependency 'Flutter'
   s.dependency 'ZIPFoundation', '~> 0.9'
+  s.dependency 'onnxruntime-objc', '1.20.0'
   #pod 'ZIPFoundation', '~> 0.9'
   s.platform = :ios, '15.0'
 

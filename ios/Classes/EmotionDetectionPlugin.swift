@@ -72,12 +72,21 @@ enum UserCodeUtils {
 @available(iOS 15.0, *)
 private extension EmotionDetectionPlugin {
     static func resetModels() {
+        onnxEmotionModel = nil
         emotionModelMobilenet = nil
         ahiEmotionModel = nil
     }
 
     func ensureModelsReady() throws {
         var lastError: Error?
+        if EmotionDetectionPlugin.onnxEmotionModel == nil {
+            do {
+                EmotionDetectionPlugin.onnxEmotionModel = try OnnxEmotionModel(userName: EmotionDetectionPlugin.currentUserName)
+            } catch {
+                lastError = error
+                print("ONNX model load failed; falling back to CoreML models: \(error.localizedDescription)")
+            }
+        }
         if EmotionDetectionPlugin.ahiEmotionModel == nil {
             do {
                 EmotionDetectionPlugin.ahiEmotionModel = try AIHFerModel(userName: EmotionDetectionPlugin.currentUserName)
@@ -94,7 +103,8 @@ private extension EmotionDetectionPlugin {
             }
         }
 
-        if EmotionDetectionPlugin.ahiEmotionModel == nil &&
+        if EmotionDetectionPlugin.onnxEmotionModel == nil &&
+            EmotionDetectionPlugin.ahiEmotionModel == nil &&
             EmotionDetectionPlugin.emotionModelMobilenet == nil {
             throw lastError ?? MLError.Error("No model could be loaded.")
         }
@@ -104,6 +114,7 @@ private extension EmotionDetectionPlugin {
 @available(iOS 15.0, *)
 public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
     var image_count = 0
+    static private var onnxEmotionModel: OnnxEmotionModel?
     static private var emotionModelMobilenet: EmotionMobilenet?
     static private var ahiEmotionModel: AIHFerModel?
     static private var currentUserName: String = UserCodeUtils.sanitize(userName: "dev@tartalabs.io")
@@ -191,7 +202,21 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
                             if cgImage != nil {
                                 do {
                                     let faceBox = CGRect(x: left, y: top, width: boxwidth, height: boxheight)
-                                    let faceImage = cgImage!.cropping(to: faceBox)
+                                    guard let faceImage = cgImage!.cropping(to: faceBox) else {
+                                        print("failed to crop face image")
+                                        return result("None")
+                                    }
+
+                                    if let onnxModel = EmotionDetectionPlugin.onnxEmotionModel {
+                                        do {
+                                            let startT = Date().timeIntervalSince1970
+                                            let retFromModel = try onnxModel.runModel(faceImage: faceImage)
+                                            print("ONNX Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
+                                            return result(retFromModel)
+                                        } catch {
+                                            print("ONNX model inference failed; trying CoreML fallback: \(error.localizedDescription)")
+                                        }
+                                    }
 
                                     if landmarks.count >= 3 {
                                         // order [mijnx, miny, maxx, maxy]
@@ -213,7 +238,10 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
 
                                         if(leftEyeImage == nil || rightEyeImage == nil || mouthImage == nil) {
                                             let startT = Date().timeIntervalSince1970
-                                            let retFromModel = try EmotionDetectionPlugin.emotionModelMobilenet!.runModel(faceImage: faceImage!)
+                                            guard let mobilenetModel = EmotionDetectionPlugin.emotionModelMobilenet else {
+                                                throw MLError.Error("No single-image fallback model available.")
+                                            }
+                                            let retFromModel = try mobilenetModel.runModel(faceImage: faceImage)
                                             print("Mobilenet Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
                                             return result(retFromModel)
 
@@ -221,7 +249,7 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
 
                                         /// Used to debug
                                         if image_count > 0 {
-                                            saveImage(image: faceImage!)
+                                            saveImage(image: faceImage)
                                             saveImage(image: leftEyeImage!, name: "leftEye")
                                             saveImage(image: rightEyeImage!, name: "rightEye")
                                             saveImage(image: mouthImage!, name: "mouth")
@@ -231,20 +259,26 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
                                         //let retFromModel = try emotionModel!.runModel(faceImage: faceImage!)
                                         if let aihModel = EmotionDetectionPlugin.ahiEmotionModel {
                                             let startT = Date().timeIntervalSince1970
-                                            let retFromModel = try aihModel.runModel(faceImage: faceImage!, leftEyeImage: leftEyeImage!,
+                                            let retFromModel = try aihModel.runModel(faceImage: faceImage, leftEyeImage: leftEyeImage!,
                                                                                              rightEyeImage: rightEyeImage!, mouthImage: mouthImage!)
                                             print("AIH Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
                                             return result(retFromModel)
                                         }
 
                                         let fallbackStart = Date().timeIntervalSince1970
-                                        let retFromModel = try EmotionDetectionPlugin.emotionModelMobilenet!.runModel(faceImage: faceImage!)
+                                        guard let mobilenetModel = EmotionDetectionPlugin.emotionModelMobilenet else {
+                                            throw MLError.Error("No fallback model available.")
+                                        }
+                                        let retFromModel = try mobilenetModel.runModel(faceImage: faceImage)
                                         print("AIH unavailable; Mobilenet fallback time: \((Date().timeIntervalSince1970 - fallbackStart)*1000) ms")
                                         return result(retFromModel)
                                     } else {
                                         // only face dtected
                                         let startT = Date().timeIntervalSince1970
-                                        let retFromModel = try EmotionDetectionPlugin.emotionModelMobilenet!.runModel(faceImage: faceImage!)
+                                        guard let mobilenetModel = EmotionDetectionPlugin.emotionModelMobilenet else {
+                                            throw MLError.Error("No fallback model available.")
+                                        }
+                                        let retFromModel = try mobilenetModel.runModel(faceImage: faceImage)
                                         print("Mobilenet Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
                                         return result(retFromModel)
 
