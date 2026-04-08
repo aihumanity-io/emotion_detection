@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "modelId": "aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx",
+  "distributionMode": "unified",
+  "sourceKind": "file",
+  "algo": "AES-256-GCM",
+  "ciphertextLen": 37466541,
+  "gcmIv": "eRPC9JOa2BSW7sBP",
+  "aad": "com.creataai.emotionsdk/shared|model:aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx",
+  "plainSha256": "-VZhBbTpw52GkoiNr-ZQsxqjwUzB17QEtZJjB4P2NF0",
+  "cekId": "aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx:v1",
+  "wrap": {
+    "type": "external"
+  }
+}

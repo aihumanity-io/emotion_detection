@@ -19,7 +19,7 @@ const List<String> _exampleModelKeys = <String>[
   'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx',
 ];
 const List<String> _androidModelKeys = <String>[
-  'mobilenetv1_fer2024-11-06-08-48-50',
+  'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx',
 ];
 const String _exampleIOSAad = String.fromEnvironment(
   'EXAMPLE_MODEL_AAD_IOS',
