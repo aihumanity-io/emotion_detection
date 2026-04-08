@@ -485,7 +485,7 @@ class _MyAppState extends State<MyApp> {
           children: [
             Text(
               _userCodeReady
-                  ? 'User code ready. Select an image to run the model.'
+                  ? 'Select an image or start camera to run the model.'
                   : _cekSecretStatus,
               textAlign: TextAlign.center,
             ),
