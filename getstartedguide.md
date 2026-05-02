@@ -98,18 +98,20 @@ Provide via .env, environment, or --dart-define.
 ```
 
 means `example/.env` is missing, empty, not rebuilt into the app, or the
-`--dart-define` values were not passed.
+app was not fully restarted after changing the file.
 
-Alternative without `.env`:
+Optional model/platform overrides:
 
-```bash
-flutter run -d macos \
-  --dart-define=SDK_KEY_ID=your-sdk-key-id \
-  --dart-define=SDK_KEY_SECRET=your-sdk-key-secret \
-  --dart-define=EXAMPLE_USER_NAME=your-verified-email@example.com
+```dotenv
+EXAMPLE_MODEL_KEY=aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx
+EXAMPLE_MODEL_AAD_IOS=com.creataai.emotionsdk/ios
+EXAMPLE_MODEL_AAD_MACOS=com.creataai.emotionsdk/ios
+EXAMPLE_MODEL_AAD_ANDROID=com.creataai.emotionsdk/android
 ```
 
-Use the same `--dart-define` flags for iOS if you do not use `.env`.
+The example app currently reads `example/.env` and process environment values.
+Use `.env` for iOS. Shell environment variables may work for `flutter run -d
+macos`, but are not the recommended path for device builds.
 
 ## 5. Install Dependencies
 
@@ -144,7 +146,7 @@ Expected first good state:
 
 - The app starts.
 - It provisions model secrets automatically through
-  `EmotionDetection.initializeWithDeveloperCredentials`.
+  `EmotionDetectionProvisioner`.
 - After secrets load, macOS shows buttons like `Select image` and `Start camera`.
 
 If macOS fails with `._Headers` or `._*.h` in a code signing error, the repo is
@@ -245,6 +247,10 @@ await EmotionDetection.initializeWithDeveloperCredentials(
   serverBaseUrl: 'https://backend.aihumanity.io',
 );
 ```
+
+The example uses `EmotionDetectionProvisioner` directly so it can expose demo
+status text and model ids, but application integrations should prefer the
+one-call initializer above.
 
 The encrypted model assets and decryption method are unchanged.
 
