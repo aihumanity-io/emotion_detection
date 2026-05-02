@@ -21,7 +21,7 @@ extension ToastExtension on BuildContext {
     );
     // then insert it to the overlay
     // this will show the toast widget on the screen
-    overlayState!.insert(toast);
+    overlayState.insert(toast);
     // 3 secs later remove the toast from the stack
     // and this one will remove the toast from the screen
     Future.delayed(duration, toast.remove);

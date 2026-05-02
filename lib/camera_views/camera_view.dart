@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:provider/provider.dart';
 
 typedef OnSwitchCamera = void Function();
 typedef OnRecord = void Function();
@@ -27,25 +26,27 @@ class CameraViewController extends ChangeNotifier {
 }
 
 class CameraView extends StatefulWidget {
-  CameraView(
-      {Key? key,
-      required this.cameraViewController,
-      required this.customPaint,
-      required this.onImage,
-      required this.onSnapShot,
-      this.onCameraFeedReady,
-      this.onDetectorViewModeChanged,
-      this.onCameraLensDirectionChanged,
-      this.initialCameraLensDirection = CameraLensDirection.back,
-      this.showOpenImageButton = false,
-      this.showExposure = true,
-      this.showZoom = false,
-      this.showImageOpen = false,
-      this.showTitle = false,
-      this.title,
-      this.showSelectCameraButton = false,
-      this.showTakePhotoButton = false})
-      : super(key: key);
+  // Stores state for the legacy widget-level switchCamera method.
+  // ignore: prefer_const_constructors_in_immutables
+  CameraView({
+    super.key,
+    required this.cameraViewController,
+    required this.customPaint,
+    required this.onImage,
+    required this.onSnapShot,
+    this.onCameraFeedReady,
+    this.onDetectorViewModeChanged,
+    this.onCameraLensDirectionChanged,
+    this.initialCameraLensDirection = CameraLensDirection.back,
+    this.showOpenImageButton = false,
+    this.showExposure = true,
+    this.showZoom = false,
+    this.showImageOpen = false,
+    this.showTitle = false,
+    this.title,
+    this.showSelectCameraButton = false,
+    this.showTakePhotoButton = false,
+  });
 
   final CustomPaint? customPaint;
   final Function(InputImage inputImage) onImage;
@@ -54,19 +55,20 @@ class CameraView extends StatefulWidget {
   final Function(CameraLensDirection direction)? onCameraLensDirectionChanged;
   final CameraLensDirection initialCameraLensDirection;
   final VoidCallback onSnapShot;
-  String? title;
-  bool showOpenImageButton = false;
-  bool showExposure = true;
-  bool showZoom = false;
-  bool showImageOpen = false;
-  bool showTitle = false;
-  bool showSelectCameraButton = false;
-  late _CameraViewState _myState;
-  bool showTakePhotoButton = false;
+  final String? title;
+  final bool showOpenImageButton;
+  final bool showExposure;
+  final bool showZoom;
+  final bool showImageOpen;
+  final bool showTitle;
+  final bool showSelectCameraButton;
+  late final _CameraViewState _myState;
+  final bool showTakePhotoButton;
 
   final CameraViewController cameraViewController;
 
   @override
+  // ignore: no_logic_in_create_state
   State<CameraView> createState() {
     _myState = _CameraViewState();
     return _myState;
@@ -177,8 +179,8 @@ class _CameraViewState extends State<CameraView> {
         children: <Widget>[
           Center(
             child: _changingCameraLens
-                ? Center(
-                    child: const Text('Changing camera lens'),
+                ? const Center(
+                    child: Text('Changing camera lens'),
                   )
                 : CameraPreview(
                     _controller!,
@@ -198,7 +200,7 @@ class _CameraViewState extends State<CameraView> {
                     Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Text(
                     widget.title!,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
@@ -227,25 +229,6 @@ class _CameraViewState extends State<CameraView> {
     );
   }
 
-  Widget _backButton() => Positioned(
-        top: 40,
-        left: 8,
-        child: SizedBox(
-          height: 50.0,
-          width: 50.0,
-          child: FloatingActionButton(
-            heroTag: Object(),
-            onPressed: () => Navigator.of(context).pop(),
-            backgroundColor: Colors.black54,
-            child: Icon(
-              Icons.arrow_back_ios_outlined,
-              size: 20,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      );
-
   Widget _detectionViewModeToggle() => Positioned(
         bottom: 20,
         left: 8,
@@ -256,7 +239,7 @@ class _CameraViewState extends State<CameraView> {
             heroTag: Object(),
             onPressed: widget.onDetectorViewModeChanged,
             backgroundColor: Colors.black54,
-            child: Icon(
+            child: const Icon(
               Icons.photo_library_outlined,
               size: 25,
               color: Colors.white,
@@ -275,7 +258,7 @@ class _CameraViewState extends State<CameraView> {
             heroTag: Object(),
             onPressed: widget.onSnapShot,
             backgroundColor: Colors.black54,
-            child: Icon(
+            child: const Icon(
               Icons.fiber_manual_record_rounded,
               size: 40,
               color: Colors.white,
@@ -343,7 +326,7 @@ class _CameraViewState extends State<CameraView> {
                     child: Center(
                       child: Text(
                         '${_currentZoomLevel.toStringAsFixed(1)}x',
-                        style: TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Colors.white),
                       ),
                     ),
                   ),
@@ -358,7 +341,7 @@ class _CameraViewState extends State<CameraView> {
         top: 40,
         right: 8,
         child: ConstrainedBox(
-          constraints: BoxConstraints(
+          constraints: const BoxConstraints(
             maxHeight: 250,
           ),
           child: Column(children: [
@@ -373,7 +356,7 @@ class _CameraViewState extends State<CameraView> {
                 child: Center(
                   child: Text(
                     '${_currentExposureOffset.toStringAsFixed(1)}x',
-                    style: TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
               ),
@@ -399,7 +382,7 @@ class _CameraViewState extends State<CameraView> {
                 ),
               ),
             ),
-            Icon(Icons.exposure)
+            const Icon(Icons.exposure)
           ]),
         ),
       );
@@ -552,7 +535,9 @@ class _CameraViewState extends State<CameraView> {
     // * bgra8888 for iOS
     if (format == null ||
         (Platform.isAndroid && format != InputImageFormat.nv21) ||
-        (Platform.isIOS && format != InputImageFormat.bgra8888)) return null;
+        (Platform.isIOS && format != InputImageFormat.bgra8888)) {
+      return null;
+    }
 
     // since format is constraint to nv21 or bgra8888, both only have one plane
     if (image.planes.length != 1) return null;

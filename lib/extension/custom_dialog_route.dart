@@ -37,7 +37,7 @@ class CustomDialogRoute<T> extends PopupRoute<T> {
   }
 
   @override
-  Color? get barrierColor => Colors.black.withOpacity(.65);
+  Color? get barrierColor => Colors.black.withValues(alpha: .65);
 
   @override
   bool get barrierDismissible => true;

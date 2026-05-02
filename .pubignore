@@ -1,24 +1,23 @@
-# Flutter & Dart
+AGENTS.md
+example/AGENTS.md
+encryption_note.md
+example/.env
+*.log
+._*
 .dart_tool/
 .packages
 .flutter-plugins
 .flutter-plugins-dependencies
 .flutter-plugins-downloader
 .metadata
-
-# Builds
 build/
 example/build/
-
-# Platforms: Android
 android/.gradle/
 android/.idea/
 android/local.properties
 example/android/.gradle/
 example/android/.idea/
 example/android/local.properties
-
-# Platforms: iOS / macOS
 DerivedData/
 ios/Flutter/Generated.xcconfig
 ios/Flutter/ephemeral/
@@ -32,27 +31,11 @@ macos/Flutter/GeneratedPluginRegistrant.swift
 macos/Flutter/ephemeral/
 example/macos/Flutter/GeneratedPluginRegistrant.swift
 example/macos/Flutter/ephemeral/
-
-# Platforms: Windows / Linux
 windows/flutter/ephemeral/
 example/windows/flutter/ephemeral/
 linux/flutter/ephemeral/
 example/linux/flutter/ephemeral/
-
-# IDEs / editors
-.idea/
-*.iml
-.vscode/
-
-# Misc
 .DS_Store
-._*
-*.log
 *.lock.json
 example/defines.json
 Generated.xcconfig
-!test/
-!test/**
-!README.md
-!lib/EmotionDetectionPlugin.dart
-!lib/EmotionDisplayScreen.dart

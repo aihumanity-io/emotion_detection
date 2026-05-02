@@ -1,7 +1,8 @@
 name: emotion_detection
 description: "Emotion detection SDK."
 version: 0.2.0
-homepage:
+homepage: https://github.com/fdchiu/emotion_detection
+repository: https://github.com/fdchiu/emotion_detection
 
 environment:
   sdk: ^3.6.1
@@ -14,14 +15,16 @@ dependencies:
     sdk: flutter
   web: ^1.0.0
   plugin_platform_interface: ^2.0.2
-  camera:
+  camera: ^0.10.6
   google_mlkit_face_detection: ^0.9.0
+  google_mlkit_commons: ^0.6.1
   image: ^4.2.0
   # state management
   provider: ^6.0.4
   path_provider: ^2.0.12
+  path: ^1.9.0
   image_picker: ^0.8.6
-  face_camera: 0.1.0
+  face_camera: ^0.1.0
   http: ^1.2.2
   crypto: ^3.0.3
 

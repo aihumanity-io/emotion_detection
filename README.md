@@ -19,7 +19,7 @@ Add to your `pubspec.yaml` (users of the plugin do this in their app):
 
 ```yaml
 dependencies:
-  emotion_detection: ^0.0.1
+  emotion_detection: ^0.2.0
 ```
 
 Then run:

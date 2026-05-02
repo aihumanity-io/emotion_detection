@@ -23,7 +23,7 @@ class DetectorViewController extends ChangeNotifier {
 
 class DetectorView extends StatefulWidget {
   DetectorView({
-    Key? key,
+    super.key,
     required this.detectorViewController,
     required this.title,
     required this.onImage,
@@ -35,7 +35,7 @@ class DetectorView extends StatefulWidget {
     this.onCameraFeedReady,
     this.onDetectorViewModeChanged,
     this.onCameraLensDirectionChanged,
-  }) : super(key: key);
+  });
 
   final String title;
   final CustomPaint? customPaint;

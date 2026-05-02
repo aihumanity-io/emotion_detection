@@ -47,7 +47,7 @@ class _ToastWidgetState extends State<ToastWidget>
         alignment: Alignment.bottomCenter,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(.65),
+            color: Colors.black.withValues(alpha: .65),
             borderRadius: const BorderRadius.all(Radius.circular(32)),
           ),
           margin: EdgeInsets.only(

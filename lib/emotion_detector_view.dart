@@ -14,7 +14,6 @@ import '../constants/emotion_enum.dart';
 //import '../models/model.dart';
 import './camera_views/detector_view.dart';
 import './camera_views/painters/face_detector_painter.dart';
-import 'EmotionDisplayScreen.dart';
 
 typedef OnFaceImage = Image Function(List<imagelib.Image>? images);
 typedef OnEmotion = Function(Map<String, double> emotions);
@@ -40,18 +39,18 @@ class EmotionDetectorViewController extends ChangeNotifier {
 }
 
 class EmotionDetectorView extends StatefulWidget {
-  EmotionDetectorView(
-      {Key? key,
-      required this.controller,
-      this.onFaceImage,
-      this.onEmotion,
-      this.onImage})
-      : super(key: key) {}
+  const EmotionDetectorView({
+    super.key,
+    required this.controller,
+    this.onFaceImage,
+    this.onEmotion,
+    this.onImage,
+  });
 
   final EmotionDetectorViewController controller;
-  OnFaceImage? onFaceImage;
-  OnEmotion? onEmotion;
-  OnImage? onImage;
+  final OnFaceImage? onFaceImage;
+  final OnEmotion? onEmotion;
+  final OnImage? onImage;
 
   @override
   State<EmotionDetectorView> createState() => _FaceDetectorViewState();
@@ -139,7 +138,6 @@ class _FaceDetectorViewState extends State<EmotionDetectorView> {
           inputImage.bytes!,
           inputImage.metadata!.size.width.toInt(),
           inputImage.metadata!.size.height.toInt());
-      ;
     }
     if (widget.onImage != null) {
       widget.onImage!(snapShotFrame);
@@ -162,11 +160,11 @@ class _FaceDetectorViewState extends State<EmotionDetectorView> {
   Future<dynamic> processFaceImage(InputImage inputImage) async {
     final int startT = DateTime.timestamp().millisecondsSinceEpoch;
     final faces = await _faceDetector.processImage(inputImage);
-    print(
+    debugPrint(
         "Face detection model time: ${DateTime.timestamp().millisecondsSinceEpoch - startT} ms");
     Map? emotionMap = await emotionController.processImage(inputImage, faces);
     emotion = emotionController.getEmotionString(emotionMap);
-    print('emotion returns: $emotion');
+    debugPrint('emotion returns: $emotion');
 
     if (inputImage.metadata?.size != null &&
         inputImage.metadata?.rotation != null) {
@@ -178,17 +176,17 @@ class _FaceDetectorViewState extends State<EmotionDetectorView> {
       );
       _customPaint = CustomPaint(painter: painter);
     } else {
-      String text = 'Faces found: ${faces.length}\n\n';
+      var faceText = 'Faces found: ${faces.length}\n\n';
       for (final face in faces) {
-        text += 'face: ${face.boundingBox}\n\n';
+        faceText += 'face: ${face.boundingBox}\n\n';
       }
-      //_text = text;
+      _text = faceText;
       // TODO: set _customPaint to draw boundingRect on top of image
       _customPaint = null;
     }
     if (emotion != EmotionEnum.NEUTRAL.value) {
       _text = emotion;
-      print("set emotion string: $emotion");
+      debugPrint("set emotion string: $emotion");
     }
     if (widget.onFaceImage != null) {
       widget.onFaceImage!(faceImages(inputImage, faces));
@@ -240,7 +238,7 @@ class _FaceDetectorViewState extends State<EmotionDetectorView> {
           image.metadata!.size.width.toInt(),
           image.metadata!.size.height.toInt());
       final maxBoxIndex = findLargestBoundingBoxIndex(faces);
-      print("maxFaceIndex: $maxBoxIndex");
+      debugPrint("maxFaceIndex: $maxBoxIndex");
       faceRect = faces[maxBoxIndex].boundingBox;
 
       final faceImage = imagelib.copyCrop(

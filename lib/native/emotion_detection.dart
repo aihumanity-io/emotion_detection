@@ -13,10 +13,9 @@ import '../utility/utility.dart';
 
 /// The [EmotionDetectionController] holds all the logic of a face expression detection plugin, developed by AIHP
 class EmotionDetectionController {
-  static const method_channel_name = "face_emotion_detection";
-  static const MethodChannel _methodChannel =
-      MethodChannel(method_channel_name);
-  static ModelRuntime modelLoader = ModelRuntime(method_channel_name);
+  static const _methodChannelName = "face_emotion_detection";
+  static const MethodChannel _methodChannel = MethodChannel(_methodChannelName);
+  static ModelRuntime modelLoader = ModelRuntime(_methodChannelName);
 
   Rect? faceRect;
   imagelib.Image? faceImage;
@@ -58,7 +57,7 @@ class EmotionDetectionController {
             image.metadata!.size.width.toInt(),
             image.metadata!.size.height.toInt());
         final maxBoxIndex = findLargestBoundingBoxIndex(faces);
-        print("maxFaceIndex: $maxBoxIndex");
+        debugPrint("maxFaceIndex: $maxBoxIndex");
         faceRect = faces[maxBoxIndex].boundingBox;
 
         faceImage = imagelib.copyCrop(
@@ -73,7 +72,8 @@ class EmotionDetectionController {
 
         final InputImageMetadata imageMeta = image.metadata!;
         double width = imageMeta.size.width, height = imageMeta.size.height;
-        print("Rotated: ${imageMeta.rotation} width:$width height: $height");
+        debugPrint(
+            "Rotated: ${imageMeta.rotation} width:$width height: $height");
         if (imageMeta.rotation == InputImageRotation.rotation270deg ||
             imageMeta.rotation == InputImageRotation.rotation90deg) {
           width = height;
@@ -108,11 +108,11 @@ class EmotionDetectionController {
           }
           if (shouldContinue) {
             List<Point<int>> mouthPoints = [];
-            if (upperLip != null && upperLip.points != null) {
+            if (upperLip != null) {
               //upperLipBx =  findMinMax(upperLip.points);
               mouthPoints.addAll(upperLip.points);
             }
-            if (lowerLip != null && lowerLip.points != null) {
+            if (lowerLip != null) {
               mouthPoints.addAll(lowerLip.points);
             }
 
@@ -124,7 +124,7 @@ class EmotionDetectionController {
             }
           }
         }
-        print("landmark length: ${landmarks.length}");
+        debugPrint("landmark length: ${landmarks.length}");
 
         if (Platform.isIOS) {
           final dataMap = await _methodChannel.invokeMethod<dynamic>(
@@ -168,7 +168,7 @@ class EmotionDetectionController {
   }
 
   String? getEmotion(List<double> probability) {
-    if (probability == null || probability.length <= 0) return 'None';
+    if (probability.isEmpty) return 'None';
     var max = 0.0;
     var idx = 0;
     for (int i = 1; i < probability.length; i++) {
@@ -190,7 +190,7 @@ class EmotionDetectionController {
         max = emotion.value;
       }
     }
-    print("emotion $emotionStr , map: $emotions ");
+    debugPrint("emotion $emotionStr , map: $emotions ");
     if (history.length >= windowSize) {
       history.removeAt(0);
     } else if (history.length < windowSize) {
@@ -200,12 +200,12 @@ class EmotionDetectionController {
     history.add(maxId!);
     final finalId = majorityVote(history, windowSize: windowSize);
     emotionStr = emotions[finalId];
-    print("final emotion: $emotionStr");
+    debugPrint("final emotion: $emotionStr");
     return emotionStr;
   }
 
   String? getEmotionFromIndex(int index) {
-    if (index < 0 || index > emotions.length) return null;
+    if (index < 0 || index >= emotions.length) return null;
     return emotions[index];
   }
 }
@@ -330,7 +330,7 @@ extension FaceExtension on Face {
     final image = await imageFile.readAsBytes();
     final decodedImage = imagelib.decodeImage(image);
 
-    final rectangle = this.boundingBox;
+    final rectangle = boundingBox;
 
     final face = imagelib.copyCrop(
       decodedImage!,
