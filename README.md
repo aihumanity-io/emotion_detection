@@ -3,6 +3,8 @@
 
 Real-time emotion detection widget for Flutter using the device camera, and our native emotion classifier.
 
+**Read this first:** [Getting Started Guide](getstartedguide.md)
+
 ## ✨ Features
 
 * Plug-and-play `EmotionDetectorView` widget
