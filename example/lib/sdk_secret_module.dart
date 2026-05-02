@@ -39,7 +39,7 @@ const String _exampleAndroidAad = String.fromEnvironment(
 );
 const String _exampleOverrideBase = String.fromEnvironment(
   'EXAMPLE_SERVER_BASE_URL',
-  defaultValue: 'https://tartalabapi.onrender.com',
+  defaultValue: 'https://backend.aihumanity.io',
 );
 const String _exampleUserName = String.fromEnvironment(
   'EXAMPLE_USER_NAME',
