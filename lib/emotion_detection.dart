@@ -12,7 +12,7 @@ class EmotionDetection {
   }
 
   // macOS camera prediction stream
-  // Usage: EmotionDetection().macCameraStream(modelId: 'mobilenetv1_fer2024-11-06-08-48-50')
+  // Usage: EmotionDetection().macCameraStream(modelId: 'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx')
   static const _cameraStream = EventChannel('face_emotion_detection/camera');
   static const _runtimeCh = MethodChannel('face_emotion_detection');
 

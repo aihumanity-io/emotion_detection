@@ -34,6 +34,9 @@ A new Flutter plugin project.
 
   # Reuse encrypted model assets from the iOS directory via a dedicated bundle.
   s.resource_bundles = {
-    'emotion_detection_models' => ['../ios/Assets/*']
+    'emotion_detection_models' => [
+      '../ios/Assets/aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx.enc',
+      '../ios/Assets/aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx.manifest.json'
+    ]
   }
 end

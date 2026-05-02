@@ -73,40 +73,20 @@ enum UserCodeUtils {
 private extension EmotionDetectionPlugin {
     static func resetModels() {
         onnxEmotionModel = nil
-        emotionModelMobilenet = nil
-        ahiEmotionModel = nil
     }
 
     func ensureModelsReady() throws {
-        var lastError: Error?
         if EmotionDetectionPlugin.onnxEmotionModel == nil {
             do {
                 EmotionDetectionPlugin.onnxEmotionModel = try OnnxEmotionModel(userName: EmotionDetectionPlugin.currentUserName)
             } catch {
-                lastError = error
-                print("ONNX model load failed; falling back to CoreML models: \(error.localizedDescription)")
-            }
-        }
-        if EmotionDetectionPlugin.ahiEmotionModel == nil {
-            do {
-                EmotionDetectionPlugin.ahiEmotionModel = try AIHFerModel(userName: EmotionDetectionPlugin.currentUserName)
-            } catch {
-                lastError = error
-                print("AIH model load failed; falling back to mobilenet-only mode: \(error.localizedDescription)")
-            }
-        }
-        if EmotionDetectionPlugin.emotionModelMobilenet == nil {
-            do {
-                EmotionDetectionPlugin.emotionModelMobilenet = try EmotionMobilenet(userName: EmotionDetectionPlugin.currentUserName)
-            } catch {
-                lastError = error
+                print("ONNX model load failed: \(error.localizedDescription)")
+                throw error
             }
         }
 
-        if EmotionDetectionPlugin.onnxEmotionModel == nil &&
-            EmotionDetectionPlugin.ahiEmotionModel == nil &&
-            EmotionDetectionPlugin.emotionModelMobilenet == nil {
-            throw lastError ?? MLError.Error("No model could be loaded.")
+        if EmotionDetectionPlugin.onnxEmotionModel == nil {
+            throw MLError.Error("No ONNX model could be loaded.")
         }
     }
 }
@@ -115,8 +95,6 @@ private extension EmotionDetectionPlugin {
 public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
     var image_count = 0
     static private var onnxEmotionModel: OnnxEmotionModel?
-    static private var emotionModelMobilenet: EmotionMobilenet?
-    static private var ahiEmotionModel: AIHFerModel?
     static private var currentUserName: String = UserCodeUtils.sanitize(userName: "dev@tartalabs.io")
 
 
@@ -166,14 +144,6 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
             result(FlutterError(code: "model_load_error", message: error.localizedDescription, details: nil))
             return
         }
-       /*
-        guard let modelURL = Bundle.main.url(forResource: "AIHFerModel", withExtension: "mlpackage") else {
-                result(FlutterError(code: "MODEL_NOT_FOUND", message: "Could not find model", details: nil))
-                return
-              }
-
-        */
-        //var ahiEmotionModel: AIHFerModel?
         do {
                 guard let arguments = call.arguments as? [String:Any],
                 let data:FlutterStandardTypedData = arguments["image"] as? FlutterStandardTypedData else {
@@ -187,7 +157,6 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
                 let top = arguments["top"] as? Int ?? 0
               let boxwidth = arguments["boxwidth"] as? Int ?? 0
               let boxheight = arguments["boxheight"] as? Int ?? 0
-              let landmarks = arguments["landmarks"] as? [[Int]] ?? [[]]
 
 
                 #if os(iOS)
@@ -207,82 +176,13 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
                                         return result("None")
                                     }
 
-                                    if let onnxModel = EmotionDetectionPlugin.onnxEmotionModel {
-                                        do {
-                                            let startT = Date().timeIntervalSince1970
-                                            let retFromModel = try onnxModel.runModel(faceImage: faceImage)
-                                            print("ONNX Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
-                                            return result(retFromModel)
-                                        } catch {
-                                            print("ONNX model inference failed; trying CoreML fallback: \(error.localizedDescription)")
-                                        }
+                                    guard let onnxModel = EmotionDetectionPlugin.onnxEmotionModel else {
+                                        throw MLError.Error("ONNX model is not loaded.")
                                     }
-
-                                    if landmarks.count >= 3 {
-                                        // order [mijnx, miny, maxx, maxy]
-                                        let leftEyeImage = cgImage!.cropping(to:
-                                                                              CGRect(x:landmarks[0][0], y:landmarks[0][1],
-                                                                                     width: landmarks[0][2]-landmarks[0][0],
-                                                                                     height: landmarks[0][3]-landmarks[0][1])
-                                        )
-
-                                        let rightEyeImage = cgImage!.cropping(to:
-                                                                                  CGRect(x:landmarks[1][0], y:landmarks[1][1],
-                                                                                         width: (landmarks[1][2]-landmarks[1][0]),
-                                                                                         height: (landmarks[1][3]-landmarks[1][1])))
-
-                                        let mouthImage = cgImage!.cropping(to:
-                                                                              CGRect(x:landmarks[2][0], y:landmarks[2][1],
-                                                                                     width: (landmarks[2][2]-landmarks[2][0]),
-                                                                                     height: (landmarks[2][3]-landmarks[2][1])))
-
-                                        if(leftEyeImage == nil || rightEyeImage == nil || mouthImage == nil) {
-                                            let startT = Date().timeIntervalSince1970
-                                            guard let mobilenetModel = EmotionDetectionPlugin.emotionModelMobilenet else {
-                                                throw MLError.Error("No single-image fallback model available.")
-                                            }
-                                            let retFromModel = try mobilenetModel.runModel(faceImage: faceImage)
-                                            print("Mobilenet Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
-                                            return result(retFromModel)
-
-                                        }
-
-                                        /// Used to debug
-                                        if image_count > 0 {
-                                            saveImage(image: faceImage)
-                                            saveImage(image: leftEyeImage!, name: "leftEye")
-                                            saveImage(image: rightEyeImage!, name: "rightEye")
-                                            saveImage(image: mouthImage!, name: "mouth")
-                                            image_count = image_count - 1
-                                        }
-                                        //
-                                        //let retFromModel = try emotionModel!.runModel(faceImage: faceImage!)
-                                        if let aihModel = EmotionDetectionPlugin.ahiEmotionModel {
-                                            let startT = Date().timeIntervalSince1970
-                                            let retFromModel = try aihModel.runModel(faceImage: faceImage, leftEyeImage: leftEyeImage!,
-                                                                                             rightEyeImage: rightEyeImage!, mouthImage: mouthImage!)
-                                            print("AIH Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
-                                            return result(retFromModel)
-                                        }
-
-                                        let fallbackStart = Date().timeIntervalSince1970
-                                        guard let mobilenetModel = EmotionDetectionPlugin.emotionModelMobilenet else {
-                                            throw MLError.Error("No fallback model available.")
-                                        }
-                                        let retFromModel = try mobilenetModel.runModel(faceImage: faceImage)
-                                        print("AIH unavailable; Mobilenet fallback time: \((Date().timeIntervalSince1970 - fallbackStart)*1000) ms")
-                                        return result(retFromModel)
-                                    } else {
-                                        // only face dtected
-                                        let startT = Date().timeIntervalSince1970
-                                        guard let mobilenetModel = EmotionDetectionPlugin.emotionModelMobilenet else {
-                                            throw MLError.Error("No fallback model available.")
-                                        }
-                                        let retFromModel = try mobilenetModel.runModel(faceImage: faceImage)
-                                        print("Mobilenet Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
-                                        return result(retFromModel)
-
-                                    }
+                                    let startT = Date().timeIntervalSince1970
+                                    let retFromModel = try onnxModel.runModel(faceImage: faceImage)
+                                    print("ONNX Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
+                                    return result(retFromModel)
 
                                 } catch {
                                     print("Model Run Failed")

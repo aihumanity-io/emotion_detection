@@ -65,7 +65,7 @@ StreamSubscription? _sub;
 void startMacCamera() {
   if (!Platform.isMacOS) return;
   _sub = ed
-      .macCameraStream(modelId: 'mobilenetv1_fer2024-11-06-08-48-50')
+      .macCameraStream(modelId: 'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx')
       .listen((dist) {
     // dist is Map<String,double>
     // e.g., {'Happiness': 0.72, 'Neutral': 0.20, ...}
@@ -78,7 +78,7 @@ void stopMacCamera() async { await _sub?.cancel(); _sub = null; }
 Notes
 - Requires `NSCameraUsageDescription` and camera entitlement in sandboxed builds.
 - The stream begins on `listen` and stops when the subscription is canceled.
-- Default model is `mobilenetv1_fer2024-11-06-08-48-50` unless overridden.
+- Default model is `aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx` unless overridden.
 
 ---
 

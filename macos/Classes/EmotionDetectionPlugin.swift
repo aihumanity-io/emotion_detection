@@ -21,7 +21,7 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
   private let cameraQueue = DispatchQueue(label: "com.tartalabs.emotion.camera.queue")
   private let ciContext = CIContext(options: nil)
   private var isProcessingFrame = false
-  private var currentModelId: String = "mobilenetv1_fer2024-11-06-08-48-50"
+  private var currentModelId: String = "aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx"
 
   // Preview window/layer for macOS camera
   private var previewWindow: NSWindow?
@@ -598,17 +598,7 @@ final class ModelCache {
       }
     }
 
-    if normalizedModelId.contains("aih_fer") {
-      addCandidate("aih_fer")
-      addCandidate("aih_fer20250115")
-    }
-    if normalizedModelId.contains("mobilenetv1_fer") {
-      addCandidate("mobilenetv1_fer")
-      addCandidate("mobilenetv1_fer2024-11-06-08-48-50")
-    }
-    // Safe fallback defaults.
-    addCandidate("mobilenetv1_fer")
-    addCandidate("mobilenetv1_fer2024-11-06-08-48-50")
+    addCandidate("aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx")
 
     for candidate in candidates {
       let hasManifest = (try? FileIO.anyBundleURL(name: candidate, ext: "manifest.json", prefer: bundle)) != nil

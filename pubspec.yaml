@@ -61,9 +61,10 @@ flutter:
         pluginClass: EmotionDetectionWeb
         fileName: emotion_detection_web.dart
 
-  # Package the model assets so native macOS can find them via Flutter assets.
+  # Package the ONNX model assets so native macOS can find them via Flutter assets.
   assets:
-    - ios/Assets/
+    - ios/Assets/aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx.enc
+    - ios/Assets/aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx.manifest.json
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:
