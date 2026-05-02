@@ -2,8 +2,8 @@
 import 'package:flutter/services.dart';
 
 class ModelRuntime {
-  static late MethodChannel _ch; // = MethodChannel('face_emotion_detection');
-  //MethodChannel _ch;
+  static MethodChannel _ch = const MethodChannel('face_emotion_detection');
+
   ModelRuntime(String methodChStr) {
     _ch = MethodChannel(methodChStr);
   }

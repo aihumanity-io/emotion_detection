@@ -25,6 +25,7 @@ dependencies:
     # the parent directory to use the current plugin's version.
     path: ../
 
+  camera:
   file_selector: ^1.0.3
   flutter_dotenv: ^5.1.0
 

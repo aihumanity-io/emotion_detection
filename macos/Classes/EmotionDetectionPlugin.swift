@@ -255,8 +255,7 @@ extension EmotionDetectionPlugin {
         return result(FlutterError(code: "invalid_args", message: "userCodeB64 must be 32-byte base64", details: nil))
       }
       try User32Store.save(decoded, account: acct, requireBiometrics: requireBiometrics)
-      let userCodePrefix = String(userCodeB64.prefix(8))
-      NSLog("EmotionDetectionPlugin setUserCode account=\(acct) bytes=\(decoded.count) b64prefix=\(userCodePrefix) sha256=\(shortSHA256(decoded))")
+      NSLog("EmotionDetectionPlugin setUserCode stored bytes=\(decoded.count) biometrics=\(requireBiometrics)")
       EmotionDetectionPluginState.currentUserName = UserCodeUtils.sanitize(userName: userName)
       result(nil)
     } catch {
@@ -288,8 +287,7 @@ extension EmotionDetectionPlugin {
     do {
       try ShardCache.setShard(modelId: modelId, base64: keyShardB64, expiresAtMs: exp)
       if let shardData = Data(base64Encoded: ShardCache.normalizeB64(keyShardB64)) {
-        let shardPrefix = String(keyShardB64.prefix(8))
-        NSLog("EmotionDetectionPlugin setKeyShard modelId=\(modelId) bytes=\(shardData.count) b64prefix=\(shardPrefix) sha256=\(shortSHA256(shardData)) exp=\(exp ?? -1)")
+        NSLog("EmotionDetectionPlugin setKeyShard modelId=\(modelId) bytes=\(shardData.count) exp=\(exp ?? -1)")
       } else {
         NSLog("EmotionDetectionPlugin setKeyShard modelId=\(modelId) invalidBase64")
       }

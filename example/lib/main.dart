@@ -1,19 +1,13 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:io' show Platform;
 
 import 'package:camera/camera.dart';
 import 'package:emotion_detection/emotion_detection.dart';
-import 'package:emotion_detection/native/model_runtime.dart';
-import 'package:emotion_detection/native/user_code_channel.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:file_selector/file_selector.dart';
-import 'dart:typed_data';
-
-import 'sdk_secret_module.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,11 +23,11 @@ Future<void> main() async {
       // Ignore; the widget will handle camera init later.
     }
   }
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
-  MyApp({super.key});
+  const MyApp({super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -45,7 +39,7 @@ class _MyAppState extends State<MyApp> {
   String _platformVersion = 'Unknown';
   final _emotionDetectionPlugin = EmotionDetection();
   EmotionDetectorViewController controller = EmotionDetectorViewController();
-  late final ExampleSdkSecretModule _sdkSecretModule;
+  late final EmotionDetectionProvisioner _provisioner;
   static const _methodChannelName = 'face_emotion_detection';
   String _cekSecretStatus = 'Not requested yet.';
   bool _fetchingCekSecret = false;
@@ -58,73 +52,19 @@ class _MyAppState extends State<MyApp> {
   String? _macResult;
   StreamSubscription<Map<String, double>>? _macCamSub;
 
-  static Map<String, String> _modelAccountIds = {
-    'aih_fer': 'aih_fer_v2025-01-15-shard',
-    'aih_fer20250115': 'aih_fer_v2025-01-15-shard',
-    'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx':
-        'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx',
-    'mobilenetv1_fer': 'mobilenetv1_fer_v2024-11-06-08-48-50-shard',
-    'mobilenetv1_fer2024-11-06-08-48-50':
-        'mobilenetv1_fer_v2024-11-06-08-48-50-shard',
-  };
-
-  String? _deriveModelShardAlias(String modelKey) {
-    final isoMatch = RegExp(r'^(.+?)(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})$')
-        .firstMatch(modelKey);
-    if (isoMatch != null) {
-      final prefix = isoMatch.group(1);
-      final ts = isoMatch.group(2);
-      if (prefix != null && ts != null) {
-        return '${prefix}_v$ts-shard';
-      }
-    }
-
-    final compactDateMatch = RegExp(r'^(.+?)(\d{8})$').firstMatch(modelKey);
-    if (compactDateMatch != null) {
-      final prefix = compactDateMatch.group(1);
-      final yyyymmdd = compactDateMatch.group(2);
-      if (prefix != null && yyyymmdd != null) {
-        final yyyy = yyyymmdd.substring(0, 4);
-        final mm = yyyymmdd.substring(4, 6);
-        final dd = yyyymmdd.substring(6, 8);
-        return '${prefix}_v$yyyy-$mm-$dd-shard';
-      }
-    }
-
-    return null;
-  }
-
-  Iterable<String> _allModelIds(String modelKey) sync* {
-    yield modelKey;
-    final mapped = _modelAccountIds[modelKey];
-    if (mapped != null && mapped.isNotEmpty && mapped != modelKey) {
-      yield mapped;
-    }
-    final derived = _deriveModelShardAlias(modelKey);
-    if (derived != null && derived.isNotEmpty && derived != modelKey) {
-      yield derived;
-    }
-  }
-
-  String _runtimeModelIdForKey(String modelKey) {
-    final mapped = _modelAccountIds[modelKey];
-    if (mapped != null && mapped.isNotEmpty) return mapped;
-    final derived = _deriveModelShardAlias(modelKey);
-    if (derived != null && derived.isNotEmpty) return derived;
-    return modelKey;
-  }
-
   String _activeMacModelId() {
-    final preferred = _sdkSecretModule.modelKey.trim();
-    if (preferred.isNotEmpty) return _runtimeModelIdForKey(preferred);
-    final keys = _sdkSecretModule.modelKeysForPlatform(defaultTargetPlatform);
+    final preferred = _provisioner.modelKey.trim();
+    if (preferred.isNotEmpty) {
+      return _provisioner.runtimeModelIdForKey(preferred);
+    }
+    final keys = _provisioner.modelKeysForPlatform(defaultTargetPlatform);
     if (keys.contains(_kNewOnnxModelId)) {
-      return _runtimeModelIdForKey(_kNewOnnxModelId);
+      return _provisioner.runtimeModelIdForKey(_kNewOnnxModelId);
     }
     if (keys.isNotEmpty) {
-      return _runtimeModelIdForKey(keys.first);
+      return _provisioner.runtimeModelIdForKey(keys.first);
     }
-    return _runtimeModelIdForKey('mobilenetv1_fer');
+    return _provisioner.runtimeModelIdForKey('mobilenetv1_fer');
   }
 
   @override
@@ -161,25 +101,17 @@ class _MyAppState extends State<MyApp> {
             '')
         .trim();
 
-    _sdkSecretModule = ExampleSdkSecretModule(
-      apiKeyId: apiKeyId.isEmpty ? null : apiKeyId,
-      apiKeySecret: apiKeySecret.isEmpty ? null : apiKeySecret,
-      overrideBaseUrl: baseUrl.isEmpty ? null : baseUrl,
-      userName: userName.isEmpty ? null : userName,
+    _provisioner = EmotionDetectionProvisioner(
+      sdkKeyId: apiKeyId,
+      sdkKeySecret: apiKeySecret,
+      serverBaseUrl: baseUrl.isEmpty ? null : baseUrl,
+      userName: userName,
       modelKey: modelKey.isEmpty ? null : modelKey,
       iosAad: aadIOS.isEmpty ? null : aadIOS,
       aad: aad.isEmpty ? null : aad,
       macosAad: aadMacOS.isEmpty ? null : aadMacOS,
       androidAad: aadAndroid.isEmpty ? null : aadAndroid,
     );
-    if (Platform.isAndroid) {
-      _modelAccountIds = {
-        'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx':
-            'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx',
-        'mobilenetv1_fer2024-11-06-08-48-50':
-            'mobilenetv1_fer2024-11-06-08-48-50',
-      };
-    }
 
     initPlatformState();
     // Automatically fetch CEK secret on startup
@@ -227,7 +159,7 @@ class _MyAppState extends State<MyApp> {
 
     try {
       _ensureModelRuntimeChannel();
-      final modelIds = _sdkSecretModule
+      final modelIds = _provisioner
           .modelKeysForPlatform(defaultTargetPlatform)
           .where((key) {
             if (defaultTargetPlatform == TargetPlatform.android &&
@@ -236,7 +168,7 @@ class _MyAppState extends State<MyApp> {
             }
             return true;
           })
-          .expand((key) => _allModelIds(key))
+          .expand((key) => _provisioner.allModelIds(key))
           .toSet();
 
       if (defaultTargetPlatform == TargetPlatform.android) {
@@ -276,39 +208,16 @@ class _MyAppState extends State<MyApp> {
     if (!_kOneTimeClearCaches || _didClearCaches) return;
     _didClearCaches = true;
     _ensureModelRuntimeChannel();
-    for (final modelKey in _sdkSecretModule.modelKeys) {
-      for (final id in _allModelIds(modelKey)) {
-        try {
-          await UserCodeChannel.clearUserCode(
-            _sdkSecretModule.userName,
-            modelId: id,
-          );
-        } catch (error) {
-          debugPrint('Clear user code failed for $id: $error');
-        }
-        try {
-          await ModelRuntime.clearKeyShard(id);
-        } catch (error) {
-          debugPrint('Clear shard failed for $id: $error');
-        }
-        try {
-          await ModelRuntime.clearModelLicense(id);
-        } catch (error) {
-          debugPrint('Clear license failed for $id: $error');
-        }
-      }
-    }
     try {
-      // Also clear legacy account without modelId to avoid collisions.
-      await UserCodeChannel.clearUserCode(_sdkSecretModule.userName);
+      await _provisioner.clearSecrets();
     } catch (error) {
-      debugPrint('Clear legacy user code failed: $error');
+      debugPrint('Clear cached model secrets failed: $error');
     }
   }
 
   Future<void> _fetchCekSecret() async {
     await _maybeClearCaches();
-    if (!_sdkSecretModule.hasRequiredConfig) {
+    if (!_provisioner.hasRequiredConfig) {
       setState(() {
         _cekSecretStatus =
             'Missing SDK_KEY_ID/SDK_KEY_SECRET. Provide via .env, environment, or --dart-define.';
@@ -322,134 +231,22 @@ class _MyAppState extends State<MyApp> {
       _modelsReady = false;
       _modelInitStatus = 'Waiting for user code to initialize models.';
     });
-    final aad = _sdkSecretModule.aadForPlatform(defaultTargetPlatform);
-    final keys = _sdkSecretModule.modelKeysForPlatform(defaultTargetPlatform);
-    final results = await _sdkSecretModule.fetchAllCekSecrets(
-      aadOverride: aad,
-      modelKeys: keys,
-      targetPlatform: defaultTargetPlatform,
-    );
-    String status = 'fetchCekSecret returned null (see logs).';
-    if (results.isNotEmpty) {
-      status = 'Received ${results.length} response(s)';
-      for (final res in results) {
-        if (kDebugMode) {
-          debugPrint('CEK secret response: ${res.payload}');
-        }
+    String status = 'Provisioning did not complete.';
+    try {
+      final result = await _provisioner.provision(
+        targetPlatform: defaultTargetPlatform,
+        aadOverride: _provisioner.aadForPlatform(defaultTargetPlatform),
+        warmUp: false,
+      );
+      _userCodeReady = result.isReady;
+      status = result.status;
+      if (_userCodeReady) {
+        await _initializeModelsIfReady();
       }
-
-      int storedUserCodes = 0;
-      int shardCount = 0;
-      int licenseCount = 0;
-
-      if (!_sdkSecretModule.hasUserName) {
-        status = 'Missing EXAMPLE_USER_NAME to save user code.';
-      } else {
-        try {
-          _ensureModelRuntimeChannel();
-
-          for (final res in results) {
-            final modelKey = res.modelKey;
-            if (defaultTargetPlatform == TargetPlatform.android &&
-                (modelKey == 'aih_fer20250115' || modelKey == 'aih_fer')) {
-              // skip models not supported on Android yet
-              continue;
-            }
-            final modelAliases = <String>{
-              ..._allModelIds(modelKey),
-            };
-            final payloadModelId =
-                (res.payload['modelId'] ?? res.payload['model_id']) as String?;
-            if (payloadModelId != null && payloadModelId.trim().isNotEmpty) {
-              modelAliases.add(payloadModelId.trim());
-            }
-            final license = _sdkSecretModule.extractLicense(res.payload,
-                modelKey: modelKey);
-            final licenseModelId = license?['modelId'] as String?;
-            if (licenseModelId != null && licenseModelId.trim().isNotEmpty) {
-              modelAliases.add(licenseModelId.trim());
-            }
-            final userCodeB64 = _sdkSecretModule.extractUserCode(res.payload,
-                modelKey: modelKey);
-            if (userCodeB64 != null) {
-              for (final modelAlias in modelAliases) {
-                try {
-                  if (kDebugMode) {
-                    debugPrint(
-                        'Storing user code for $modelAlias len=${userCodeB64.length} b64prefix=${userCodeB64.substring(0, math.min(8, userCodeB64.length))}');
-                  }
-                  await UserCodeChannel.saveUserCode(
-                    userName: _sdkSecretModule.userName,
-                    userCodeB64: userCodeB64,
-                    modelId: modelAlias,
-                  );
-                  storedUserCodes++;
-                } catch (error) {
-                  debugPrint('saveUserCode failed for $modelAlias: $error');
-                }
-              }
-            }
-            if (defaultTargetPlatform == TargetPlatform.iOS ||
-                defaultTargetPlatform == TargetPlatform.android ||
-                defaultTargetPlatform == TargetPlatform.macOS) {
-              final shardB64 = _sdkSecretModule.extractShard(
-                res.payload,
-                modelKey: modelKey,
-              );
-              final expiresAtMs = _sdkSecretModule.extractExpiresAtMs(
-                res.payload,
-                modelKey: modelKey,
-              );
-              if (shardB64 != null) {
-                try {
-                  if (kDebugMode) {
-                    debugPrint(
-                        'Storing shard for $modelKey len=${shardB64.length} b64prefix=${shardB64.substring(0, math.min(8, shardB64.length))} exp=$expiresAtMs');
-                  }
-                  for (final id in modelAliases) {
-                    await ModelRuntime.setKeyShard(
-                      modelId: id,
-                      keyShardB64: shardB64,
-                      expiresAtMs: expiresAtMs,
-                      userName: _sdkSecretModule.userName,
-                    );
-                  }
-                  shardCount++;
-                } catch (error) {
-                  debugPrint('setKeyShard failed for $modelKey: $error');
-                }
-              }
-            }
-            if (license != null && license.isNotEmpty) {
-              for (final id in modelAliases) {
-                try {
-                  await ModelRuntime.setModelLicense(
-                    modelId: id,
-                    license: license,
-                  );
-                  licenseCount++;
-                } catch (error) {
-                  debugPrint('setModelLicense failed for $id: $error');
-                }
-              }
-            }
-          }
-
-          _userCodeReady = storedUserCodes > 0;
-          if (storedUserCodes == 0) {
-            status = 'Responses missing userCodeB64 field.';
-          } else {
-            status = shardCount > 0
-                ? 'User codes stored ($storedUserCodes); shards stored ($shardCount/${results.length}); licenses stored ($licenseCount)'
-                : 'User codes stored ($storedUserCodes); no shards in responses; licenses stored ($licenseCount)';
-            await _initializeModelsIfReady();
-          }
-        } catch (error) {
-          status = 'Failed to store user code/shard: $error';
-          _userCodeReady = false;
-          _modelsReady = false;
-        }
-      }
+    } catch (error) {
+      status = 'Provisioning failed: $error';
+      _userCodeReady = false;
+      _modelsReady = false;
     }
 
     setState(() {
@@ -471,7 +268,7 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Emotion SDK Example'),
+          title: Text('Emotion SDK Example ($_platformVersion)'),
         ),
         body: body,
       ),

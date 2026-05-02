@@ -143,7 +143,8 @@ flutter run -d macos
 Expected first good state:
 
 - The app starts.
-- It fetches secrets automatically.
+- It provisions model secrets automatically through
+  `EmotionDetection.initializeWithDeveloperCredentials`.
 - After secrets load, macOS shows buttons like `Select image` and `Start camera`.
 
 If macOS fails with `._Headers` or `._*.h` in a code signing error, the repo is
@@ -228,6 +229,24 @@ On first launch, accept camera permission.
 - No `Missing SDK_KEY_ID/SDK_KEY_SECRET` message.
 - iOS camera permission prompt appears on first camera use.
 - macOS can select an image or start the camera after secrets are fetched.
+
+## SDK Provisioning Boundary
+
+In this phase the example still uses `SDK_KEY_ID`, `SDK_KEY_SECRET`, and
+`EXAMPLE_USER_NAME`, but app code no longer handles model-decryption payloads
+directly. The SDK initializer fetches backend payloads and stores user
+code/shard/license data through native secure storage.
+
+```dart
+await EmotionDetection.initializeWithDeveloperCredentials(
+  sdkKeyId: '<sdk-key-id>',
+  sdkKeySecret: '<sdk-key-secret>',
+  userName: '<verified-email>',
+  serverBaseUrl: 'https://backend.aihumanity.io',
+);
+```
+
+The encrypted model assets and decryption method are unchanged.
 
 ## Troubleshooting
 

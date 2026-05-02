@@ -177,6 +177,40 @@ Usage notes
 - Provide an `EmotionDetectorViewController` to trigger snapshots (`takeSnapShot`) or delegate picture capture (`takePicture`).
 - In callbacks, handle `null`/empty payloads; native inference returns a `Map<String, double>` for emotions.
 
+### `EmotionDetection.initializeWithDeveloperCredentials`
+
+Phase 1 SDK initializer for developer-credential provisioning. This keeps the
+existing encrypted model format and native decryption flow, but moves the CEK
+secret/license/shard/user-code orchestration into the SDK.
+
+```dart
+final result = await EmotionDetection.initializeWithDeveloperCredentials(
+  sdkKeyId: '<sdk-key-id>',
+  sdkKeySecret: '<sdk-key-secret>',
+  userName: 'verified-developer@example.com',
+  modelKeys: ['example_model'],
+  serverBaseUrl: 'https://backend.aihumanity.io',
+);
+```
+
+The initializer:
+
+* signs backend requests with the SDK key pair,
+* fetches CEK-secret payloads and license fallback data,
+* extracts user code, shard, license, expiry, and model aliases,
+* stores user code/shard/license through the native secure runtime,
+* warms Android models when requested,
+* returns `EmotionProvisioningResult` with counts and status.
+
+Normal app code should call this initializer before mounting
+`EmotionDetectorView` or running `ModelRuntime.predict`. The lower-level APIs
+below remain available for debugging and custom flows.
+
+> Security note: this phase still places `sdkKeySecret` in the client app. Use
+> it for development or controlled deployments. A production hosted path should
+> replace this with a publishable key plus server-side app attestation, or an
+> enterprise path where the developer backend holds the SDK secret.
+
 ### `CekSecretClient.fetchCekSecret`
 
 Utility for calling `GET /sdk/cek-secret` with your SDK key pair. Signs the
@@ -198,6 +232,10 @@ final cek = await CekSecretClient.fetchCekSecret(
   modelIdForShard: 'example_model', // optional override used when caching shard
 );
 ```
+
+This is an advanced API. Prefer
+`EmotionDetection.initializeWithDeveloperCredentials` unless you are building a
+custom provisioning flow.
 
 * Configure the default host via `--dart-define=EMOTION_SERVER_URL=https://...`.
 * Pass `overrideBaseUrl` per call to target alternate stacks.

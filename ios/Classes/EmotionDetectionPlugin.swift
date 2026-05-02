@@ -33,7 +33,7 @@ private enum UserCodeBridge {
         }
         guard decoded.count == 32 else { throw UserCodeBridgeError.invalidLength }
         try User32Store.save(decoded, account: account, requireBiometrics: requireBiometrics)
-        print("UserCode: saved for account=\(account) bytes=\(decoded.count) biometrics=\(requireBiometrics)")
+        print("UserCode: saved bytes=\(decoded.count) biometrics=\(requireBiometrics)")
     }
 
     static func clearUserCode(userName: String, modelId: String?) throws {
@@ -267,7 +267,7 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
                !userName.isEmpty {
                 let acct = UserCodeUtils.sanitize(userName: userName)
                 try? ShardCache.setShard(modelId: acct, base64: shardB64, expiresAtMs: expiresAtMs)
-                print("setKeyShard: stored for modelId=\(modelId) and user=\(acct)")
+                print("setKeyShard: stored for modelId=\(modelId)")
             } else {
                 print("setKeyShard: stored for modelId=\(modelId) (no user alias)")
             }
