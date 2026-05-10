@@ -21,6 +21,7 @@ add_library(emotion_native_core STATIC
   src/crypto_sha256.cpp
   src/key_material.cpp
   src/license_state.cpp
+  src/logging.cpp
   src/model_manifest.cpp
   src/secure_store.cpp)
 target_include_directories(emotion_native_core PUBLIC
@@ -104,4 +105,13 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_secure_store_test COMMAND emotion_secure_store_test)
+
+  add_executable(emotion_logging_test
+    tests/logging_test.cpp)
+  target_link_libraries(emotion_logging_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_logging_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_logging_test COMMAND emotion_logging_test)
 endif()

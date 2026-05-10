@@ -285,7 +285,8 @@ Deliverables:
 - License state validation started in `native/src/license_state.cpp` with
   missing, mismatch, not-active, and expired tests.
 - Encrypted fixture model package.
-- Debug logging stages for provisioning/decrypt/load.
+- Debug logging stages for provisioning/decrypt/load. `native/src/logging.cpp`
+  emits stage/model-scoped logs and redacts sensitive key material.
 
 Tests/gates:
 
