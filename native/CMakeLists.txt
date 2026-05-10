@@ -37,6 +37,10 @@ add_library(emotion_native_core STATIC
   src/model_manifest.cpp
   src/model_package.cpp
   src/model_registry.cpp
+  src/onnx_runtime_adapter.cpp
+  src/postprocessing.cpp
+  src/preprocessing.cpp
+  src/runtime_session.cpp
   src/secure_store.cpp)
 target_include_directories(emotion_native_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -169,4 +173,40 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_model_registry_test COMMAND emotion_model_registry_test)
+
+  add_executable(emotion_preprocessing_test
+    tests/preprocessing_test.cpp)
+  target_link_libraries(emotion_preprocessing_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_preprocessing_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_preprocessing_test COMMAND emotion_preprocessing_test)
+
+  add_executable(emotion_postprocessing_test
+    tests/postprocessing_test.cpp)
+  target_link_libraries(emotion_postprocessing_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_postprocessing_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_postprocessing_test COMMAND emotion_postprocessing_test)
+
+  add_executable(emotion_runtime_session_test
+    tests/runtime_session_test.cpp)
+  target_link_libraries(emotion_runtime_session_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_runtime_session_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_runtime_session_test COMMAND emotion_runtime_session_test)
+
+  add_executable(emotion_onnx_runtime_adapter_test
+    tests/onnx_runtime_adapter_test.cpp)
+  target_link_libraries(emotion_onnx_runtime_adapter_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_onnx_runtime_adapter_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_onnx_runtime_adapter_test COMMAND emotion_onnx_runtime_adapter_test)
 endif()

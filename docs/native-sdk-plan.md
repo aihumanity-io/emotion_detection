@@ -306,9 +306,13 @@ Deliverables:
 
 - Model registry. Started in `native/src/model_registry.cpp` with registration,
   duplicate, lookup, warm, unload, and clear tests.
-- ONNX Runtime adapter.
-- Image preprocessing and result postprocessing.
-- Warmup, predict, unload lifecycle.
+- Image preprocessing and result postprocessing. Started with RGB/RGBA/BGRA
+  preprocessing, NHWC/NCHW tensors, softmax postprocessing, and C result copy
+  tests.
+- Warmup, predict, unload lifecycle. Started with `RuntimeSession` and a fake
+  runtime test double.
+- ONNX Runtime adapter. Boundary added with a fail-closed unsupported adapter
+  until ONNX Runtime is linked.
 - C/C++ sample for still-image prediction.
 
 Tests/gates:
