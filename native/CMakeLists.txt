@@ -29,6 +29,7 @@ target_include_directories(emotion_sdk_headers INTERFACE
 
 add_library(emotion_native_core STATIC
   src/crypto_aes_gcm.cpp
+  src/decrypt_pipeline.cpp
   src/crypto_sha256.cpp
   src/key_material.cpp
   src/license_state.cpp
@@ -149,4 +150,13 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_model_package_test COMMAND emotion_model_package_test)
+
+  add_executable(emotion_decrypt_pipeline_test
+    tests/decrypt_pipeline_test.cpp)
+  target_link_libraries(emotion_decrypt_pipeline_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_decrypt_pipeline_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_decrypt_pipeline_test COMMAND emotion_decrypt_pipeline_test)
 endif()

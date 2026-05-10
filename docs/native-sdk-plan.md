@@ -288,6 +288,8 @@ Deliverables:
 - Encrypted fixture model package.
 - Encrypted payload hash and package expiry verification started in
   `native/src/model_package.cpp`.
+- Decrypt pipeline started in `native/src/decrypt_pipeline.cpp`, combining CEK
+  derivation, encrypted hash check, AES-GCM auth, and plaintext hash check.
 - Debug logging stages for provisioning/decrypt/load. `native/src/logging.cpp`
   emits stage/model-scoped logs and redacts sensitive key material.
 
