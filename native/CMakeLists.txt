@@ -20,6 +20,7 @@ target_include_directories(emotion_sdk_headers INTERFACE
 add_library(emotion_native_core STATIC
   src/crypto_sha256.cpp
   src/key_material.cpp
+  src/license_state.cpp
   src/model_manifest.cpp)
 target_include_directories(emotion_native_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -84,4 +85,13 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_key_material_test COMMAND emotion_key_material_test)
+
+  add_executable(emotion_license_state_test
+    tests/license_state_test.cpp)
+  target_link_libraries(emotion_license_state_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_license_state_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_license_state_test COMMAND emotion_license_state_test)
 endif()

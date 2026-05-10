@@ -281,6 +281,8 @@ Deliverables:
 - User-code plus shard CEK derivation and shard expiry checks started in
   `native/src/key_material.cpp`. In-memory key state now has user/model
   isolation tests.
+- License state validation started in `native/src/license_state.cpp` with
+  missing, mismatch, not-active, and expired tests.
 - Encrypted fixture model package.
 - Debug logging stages for provisioning/decrypt/load.
 
