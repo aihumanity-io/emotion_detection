@@ -279,7 +279,8 @@ Deliverables:
   tests. HMAC-SHA256 and HKDF-SHA256 added with RFC test vectors.
 - Secure-store adapter interface.
 - User-code plus shard CEK derivation and shard expiry checks started in
-  `native/src/key_material.cpp`.
+  `native/src/key_material.cpp`. In-memory key state now has user/model
+  isolation tests.
 - Encrypted fixture model package.
 - Debug logging stages for provisioning/decrypt/load.
 

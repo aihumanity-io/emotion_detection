@@ -1,5 +1,6 @@
 #include "emotion_key_material.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 #include "emotion_crypto.h"
@@ -118,6 +119,64 @@ KeyMaterialResult derive_model_cek(const std::array<uint8_t, 32>& user_code,
   std::copy(cek.begin(), cek.end(), result.cek.begin());
   result.ok = true;
   return result;
+}
+
+void KeyMaterialStore::set_user_code(
+    const std::string& user_name,
+    const std::string& model_id,
+    const std::array<uint8_t, 32>& user_code) {
+  user_codes_[user_code_key(user_name, model_id)] = user_code;
+}
+
+void KeyMaterialStore::set_key_shard(const std::string& model_id,
+                                     const KeyShard& shard) {
+  key_shards_[model_id] = shard;
+}
+
+void KeyMaterialStore::clear_model(const std::string& model_id) {
+  key_shards_.erase(model_id);
+  for (std::map<std::string, std::array<uint8_t, 32>>::iterator it =
+           user_codes_.begin();
+       it != user_codes_.end();) {
+    const std::string suffix = "\n" + model_id;
+    if (it->first.size() >= suffix.size() &&
+        it->first.compare(it->first.size() - suffix.size(), suffix.size(),
+                          suffix) == 0) {
+      it = user_codes_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+KeyMaterialResult KeyMaterialStore::derive_model_cek(
+    const std::string& user_name,
+    const std::string& model_id,
+    const KdfInfo& kdf_info,
+    int64_t now_ms) const {
+  const std::map<std::string, std::array<uint8_t, 32>>::const_iterator user_it =
+      user_codes_.find(user_code_key(user_name, model_id));
+  if (user_it == user_codes_.end()) {
+    KeyMaterialResult result;
+    result.error = "missing user code";
+    return result;
+  }
+
+  const std::map<std::string, KeyShard>::const_iterator shard_it =
+      key_shards_.find(model_id);
+  if (shard_it == key_shards_.end()) {
+    KeyMaterialResult result;
+    result.error = "missing key shard";
+    return result;
+  }
+
+  return native_sdk::derive_model_cek(user_it->second, shard_it->second,
+                                      kdf_info, now_ms);
+}
+
+std::string KeyMaterialStore::user_code_key(const std::string& user_name,
+                                            const std::string& model_id) {
+  return user_name + "\n" + model_id;
 }
 
 }  // namespace native_sdk

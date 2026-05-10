@@ -10,6 +10,7 @@
 namespace {
 
 using emotion::native_sdk::KeyMaterialResult;
+using emotion::native_sdk::KeyMaterialStore;
 using emotion::native_sdk::KeyShard;
 using emotion::native_sdk::KdfInfo;
 using emotion::native_sdk::derive_model_cek;
@@ -28,6 +29,14 @@ std::array<uint8_t, 32> sequential_user_code() {
   std::array<uint8_t, 32> user_code = {};
   for (size_t i = 0; i < user_code.size(); ++i) {
     user_code[i] = static_cast<uint8_t>(i);
+  }
+  return user_code;
+}
+
+std::array<uint8_t, 32> shifted_user_code() {
+  std::array<uint8_t, 32> user_code = {};
+  for (size_t i = 0; i < user_code.size(); ++i) {
+    user_code[i] = static_cast<uint8_t>(0x80u + i);
   }
   return user_code;
 }
@@ -60,8 +69,8 @@ KeyShard test_shard() {
 }
 
 void valid_material_derives_stable_cek() {
-  const KeyMaterialResult result =
-      derive_model_cek(sequential_user_code(), test_shard(), test_kdf_info(), 1000);
+  const KeyMaterialResult result = derive_model_cek(
+      sequential_user_code(), test_shard(), test_kdf_info(), 1000);
 
   expect_true(result.ok, "valid key material should derive CEK");
   expect_true(
@@ -110,6 +119,56 @@ void missing_shard_is_rejected() {
               "missing shard error should be reported");
 }
 
+void store_isolates_user_code_by_user_and_model() {
+  KeyMaterialStore store;
+  store.set_key_shard("model-a", test_shard());
+  store.set_key_shard("model-b", test_shard());
+  store.set_user_code("david@example.com", "model-a", sequential_user_code());
+  store.set_user_code("david@example.com", "model-b", shifted_user_code());
+  store.set_user_code("alex@example.com", "model-a", shifted_user_code());
+
+  const KeyMaterialResult david_model_a = store.derive_model_cek(
+      "david@example.com", "model-a", test_kdf_info(), 1000);
+  const KeyMaterialResult david_model_b = store.derive_model_cek(
+      "david@example.com", "model-b", test_kdf_info(), 1000);
+  const KeyMaterialResult alex_model_a = store.derive_model_cek(
+      "alex@example.com", "model-a", test_kdf_info(), 1000);
+
+  expect_true(david_model_a.ok, "user/model A should derive CEK");
+  expect_true(david_model_b.ok, "same user/model B should derive CEK");
+  expect_true(alex_model_a.ok, "different user/same model should derive CEK");
+  expect_true(david_model_a.cek != david_model_b.cek,
+              "same user state should be isolated by model");
+  expect_true(david_model_a.cek != alex_model_a.cek,
+              "same model state should be isolated by user");
+}
+
+void store_reports_missing_user_code() {
+  KeyMaterialStore store;
+  store.set_key_shard("model-a", test_shard());
+
+  const KeyMaterialResult result = store.derive_model_cek(
+      "missing@example.com", "model-a", test_kdf_info(), 1000);
+
+  expect_true(!result.ok, "missing user code should fail");
+  expect_true(result.error == "missing user code",
+              "missing user code error should be reported");
+}
+
+void clear_model_removes_shard_and_user_codes() {
+  KeyMaterialStore store;
+  store.set_key_shard("model-a", test_shard());
+  store.set_user_code("david@example.com", "model-a", sequential_user_code());
+  store.clear_model("model-a");
+
+  const KeyMaterialResult result = store.derive_model_cek(
+      "david@example.com", "model-a", test_kdf_info(), 1000);
+
+  expect_true(!result.ok, "cleared model should fail");
+  expect_true(result.error == "missing user code",
+              "cleared user code should be reported first");
+}
+
 }  // namespace
 
 int main() {
@@ -117,5 +176,8 @@ int main() {
   shard_expiry_is_enforced();
   unsupported_kdf_is_rejected();
   missing_shard_is_rejected();
+  store_isolates_user_code_by_user_and_model();
+  store_reports_missing_user_code();
+  clear_model_removes_shard_and_user_codes();
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
