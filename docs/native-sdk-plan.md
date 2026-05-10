@@ -276,7 +276,7 @@ Deliverables:
   fixture-backed native tests.
 - Shared AES-GCM, HKDF, hash, and signature verification flow. SHA-256 hash
   verification started in `native/src/crypto_sha256.cpp` with known-vector
-  tests.
+  tests. HMAC-SHA256 and HKDF-SHA256 added with RFC test vectors.
 - Secure-store adapter interface.
 - Encrypted fixture model package.
 - Debug logging stages for provisioning/decrypt/load.

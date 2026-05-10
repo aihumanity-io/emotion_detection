@@ -65,4 +65,13 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_crypto_sha256_test COMMAND emotion_crypto_sha256_test)
+
+  add_executable(emotion_crypto_hkdf_test
+    tests/crypto_hkdf_test.cpp)
+  target_link_libraries(emotion_crypto_hkdf_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_crypto_hkdf_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_crypto_hkdf_test COMMAND emotion_crypto_hkdf_test)
 endif()

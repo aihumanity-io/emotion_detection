@@ -1,5 +1,6 @@
 #include "emotion_crypto.h"
 
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 
@@ -179,6 +180,105 @@ std::string sha256_hex(const uint8_t* data, size_t data_len) {
 
 std::string sha256_hex(const std::vector<uint8_t>& data) {
   return sha256_hex(data.data(), data.size());
+}
+
+std::array<uint8_t, 32> hmac_sha256(const uint8_t* key,
+                                    size_t key_len,
+                                    const uint8_t* data,
+                                    size_t data_len) {
+  const size_t kBlockSize = 64u;
+  std::vector<uint8_t> normalized_key(kBlockSize, 0u);
+  if (key_len > kBlockSize) {
+    const std::array<uint8_t, 32> key_hash = sha256(key, key_len);
+    for (size_t i = 0; i < key_hash.size(); ++i) {
+      normalized_key[i] = key_hash[i];
+    }
+  } else if (key_len > 0u) {
+    normalized_key.assign(key, key + key_len);
+    normalized_key.resize(kBlockSize, 0u);
+  }
+
+  std::vector<uint8_t> inner(kBlockSize + data_len);
+  std::vector<uint8_t> outer(kBlockSize + 32u);
+  for (size_t i = 0; i < kBlockSize; ++i) {
+    inner[i] = normalized_key[i] ^ 0x36u;
+    outer[i] = normalized_key[i] ^ 0x5cu;
+  }
+  if (data_len > 0u) {
+    std::copy(data, data + data_len, inner.begin() + kBlockSize);
+  }
+
+  const std::array<uint8_t, 32> inner_hash = sha256(inner);
+  std::copy(inner_hash.begin(), inner_hash.end(), outer.begin() + kBlockSize);
+  return sha256(outer);
+}
+
+std::array<uint8_t, 32> hmac_sha256(const std::vector<uint8_t>& key,
+                                    const std::vector<uint8_t>& data) {
+  return hmac_sha256(key.data(), key.size(), data.data(), data.size());
+}
+
+std::string hmac_sha256_hex(const std::vector<uint8_t>& key,
+                            const std::vector<uint8_t>& data) {
+  const std::array<uint8_t, 32> digest = hmac_sha256(key, data);
+  std::ostringstream output;
+  output << std::hex << std::setfill('0');
+  for (uint8_t byte : digest) {
+    output << std::setw(2) << static_cast<int>(byte);
+  }
+  return output.str();
+}
+
+std::array<uint8_t, 32> hkdf_sha256_extract(const std::vector<uint8_t>& salt,
+                                            const std::vector<uint8_t>& ikm) {
+  if (salt.empty()) {
+    const std::vector<uint8_t> zero_salt(32u, 0u);
+    return hmac_sha256(zero_salt, ikm);
+  }
+  return hmac_sha256(salt, ikm);
+}
+
+std::vector<uint8_t> hkdf_sha256_expand(const std::vector<uint8_t>& prk,
+                                        const std::vector<uint8_t>& info,
+                                        size_t output_len) {
+  if (prk.empty() || output_len > 255u * 32u) {
+    return {};
+  }
+
+  std::vector<uint8_t> output;
+  output.reserve(output_len);
+  std::vector<uint8_t> previous_block;
+  uint8_t counter = 1u;
+
+  while (output.size() < output_len) {
+    std::vector<uint8_t> block_input;
+    block_input.reserve(previous_block.size() + info.size() + 1u);
+    block_input.insert(block_input.end(), previous_block.begin(),
+                       previous_block.end());
+    block_input.insert(block_input.end(), info.begin(), info.end());
+    block_input.push_back(counter);
+
+    const std::array<uint8_t, 32> block = hmac_sha256(prk, block_input);
+    previous_block.assign(block.begin(), block.end());
+
+    const size_t remaining = output_len - output.size();
+    const size_t take = remaining < previous_block.size() ? remaining
+                                                          : previous_block.size();
+    output.insert(output.end(), previous_block.begin(),
+                  previous_block.begin() + take);
+    ++counter;
+  }
+
+  return output;
+}
+
+std::vector<uint8_t> hkdf_sha256(const std::vector<uint8_t>& ikm,
+                                 const std::vector<uint8_t>& salt,
+                                 const std::vector<uint8_t>& info,
+                                 size_t output_len) {
+  const std::array<uint8_t, 32> prk = hkdf_sha256_extract(salt, ikm);
+  return hkdf_sha256_expand(std::vector<uint8_t>(prk.begin(), prk.end()), info,
+                            output_len);
 }
 
 bool verify_sha256_hex(const uint8_t* data,
