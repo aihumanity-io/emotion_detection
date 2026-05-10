@@ -272,7 +272,8 @@ Tests/gates:
 
 Deliverables:
 
-- Shared manifest parser.
+- Shared manifest parser. Started in `native/src/model_manifest.cpp` with
+  fixture-backed native tests.
 - Shared AES-GCM, HKDF, hash, and signature verification flow.
 - Secure-store adapter interface.
 - Encrypted fixture model package.
