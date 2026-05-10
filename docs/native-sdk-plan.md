@@ -278,6 +278,8 @@ Deliverables:
   verification started in `native/src/crypto_sha256.cpp` with known-vector
   tests. HMAC-SHA256 and HKDF-SHA256 added with RFC test vectors.
 - Secure-store adapter interface.
+- User-code plus shard CEK derivation and shard expiry checks started in
+  `native/src/key_material.cpp`.
 - Encrypted fixture model package.
 - Debug logging stages for provisioning/decrypt/load.
 
