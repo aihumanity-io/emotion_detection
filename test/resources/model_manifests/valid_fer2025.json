@@ -1,0 +1,21 @@
+{
+  "manifest_schema_version": 1,
+  "model_id": "aih_fer2025",
+  "model_version": "2025.03.13",
+  "model_format": "onnx",
+  "input_shape": [1, 224, 224, 3],
+  "labels": ["angry", "happy", "neutral", "sad", "surprise"],
+  "aad": "com.tartalabs.emotion/aih_fer2025",
+  "kdf_info": {
+    "algorithm": "hkdf-sha256",
+    "salt_b64": "AAAAAAAAAAAAAAAAAAAAAA==",
+    "info": "emotion-sdk:model:aih_fer2025"
+  },
+  "shard_required": true,
+  "expiry_epoch_ms": 0,
+  "encrypted_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "plaintext_sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+  "runtime_min_version": "0.1.0",
+  "sdk_min_version": "0.2.0",
+  "signature_algorithm": "ed25519"
+}

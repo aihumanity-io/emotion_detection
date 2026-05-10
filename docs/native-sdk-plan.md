@@ -265,6 +265,8 @@ Tests/gates:
 - Header compiles as C and C++.
 - Manifest schema has fixture validation tests.
 - No platform behavior changes yet.
+- Every later phase must land tests in the same change set as the behavior it
+  introduces.
 
 ### Phase 1: Encryption Core
 

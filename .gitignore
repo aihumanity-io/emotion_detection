@@ -53,6 +53,7 @@ example/defines.json
 Generated.xcconfig
 !test/
 !test/**
+**/._*
 !README.md
 !lib/EmotionDetectionPlugin.dart
 !lib/EmotionDisplayScreen.dart
