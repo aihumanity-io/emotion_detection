@@ -274,7 +274,9 @@ Deliverables:
 
 - Shared manifest parser. Started in `native/src/model_manifest.cpp` with
   fixture-backed native tests.
-- Shared AES-GCM, HKDF, hash, and signature verification flow.
+- Shared AES-GCM, HKDF, hash, and signature verification flow. SHA-256 hash
+  verification started in `native/src/crypto_sha256.cpp` with known-vector
+  tests.
 - Secure-store adapter interface.
 - Encrypted fixture model package.
 - Debug logging stages for provisioning/decrypt/load.
