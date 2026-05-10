@@ -277,7 +277,8 @@ Deliverables:
 - Shared AES-GCM, HKDF, hash, and signature verification flow. SHA-256 hash
   verification started in `native/src/crypto_sha256.cpp` with known-vector
   tests. HMAC-SHA256 and HKDF-SHA256 added with RFC test vectors.
-- Secure-store adapter interface.
+- Secure-store adapter interface. C ABI adapter wrapper started in
+  `native/src/secure_store.cpp` with mock-backed tests.
 - User-code plus shard CEK derivation and shard expiry checks started in
   `native/src/key_material.cpp`. In-memory key state now has user/model
   isolation tests.
