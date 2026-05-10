@@ -304,7 +304,8 @@ Tests/gates:
 
 Deliverables:
 
-- Model registry.
+- Model registry. Started in `native/src/model_registry.cpp` with registration,
+  duplicate, lookup, warm, unload, and clear tests.
 - ONNX Runtime adapter.
 - Image preprocessing and result postprocessing.
 - Warmup, predict, unload lifecycle.

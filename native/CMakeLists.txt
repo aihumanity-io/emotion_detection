@@ -36,6 +36,7 @@ add_library(emotion_native_core STATIC
   src/logging.cpp
   src/model_manifest.cpp
   src/model_package.cpp
+  src/model_registry.cpp
   src/secure_store.cpp)
 target_include_directories(emotion_native_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -159,4 +160,13 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_decrypt_pipeline_test COMMAND emotion_decrypt_pipeline_test)
+
+  add_executable(emotion_model_registry_test
+    tests/model_registry_test.cpp)
+  target_link_libraries(emotion_model_registry_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_model_registry_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_model_registry_test COMMAND emotion_model_registry_test)
 endif()
