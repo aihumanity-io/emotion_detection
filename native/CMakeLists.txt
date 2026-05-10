@@ -13,11 +13,22 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+set(ENABLE_TESTING OFF CACHE BOOL "Disable mbedTLS tests" FORCE)
+set(ENABLE_PROGRAMS OFF CACHE BOOL "Disable mbedTLS programs" FORCE)
+FetchContent_Declare(
+  mbedtls
+  URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.5/mbedtls-3.6.5.tar.bz2
+  SOURCE_SUBDIR mbedtls-3.6.5
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(mbedtls)
+
 add_library(emotion_sdk_headers INTERFACE)
 target_include_directories(emotion_sdk_headers INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 add_library(emotion_native_core STATIC
+  src/crypto_aes_gcm.cpp
   src/crypto_sha256.cpp
   src/key_material.cpp
   src/license_state.cpp
@@ -27,7 +38,10 @@ add_library(emotion_native_core STATIC
   src/secure_store.cpp)
 target_include_directories(emotion_native_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(emotion_native_core PRIVATE
+  "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5/include")
 target_link_libraries(emotion_native_core PRIVATE
+  mbedcrypto
   nlohmann_json::nlohmann_json)
 set_target_properties(emotion_native_core PROPERTIES
   CXX_STANDARD 11
@@ -79,6 +93,15 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_crypto_hkdf_test COMMAND emotion_crypto_hkdf_test)
+
+  add_executable(emotion_crypto_aes_gcm_test
+    tests/crypto_aes_gcm_test.cpp)
+  target_link_libraries(emotion_crypto_aes_gcm_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_crypto_aes_gcm_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_crypto_aes_gcm_test COMMAND emotion_crypto_aes_gcm_test)
 
   add_executable(emotion_key_material_test
     tests/key_material_test.cpp)

@@ -276,7 +276,8 @@ Deliverables:
   fixture-backed native tests.
 - Shared AES-GCM, HKDF, hash, and signature verification flow. SHA-256 hash
   verification started in `native/src/crypto_sha256.cpp` with known-vector
-  tests. HMAC-SHA256 and HKDF-SHA256 added with RFC test vectors.
+  tests. HMAC-SHA256 and HKDF-SHA256 added with RFC test vectors. AES-256-GCM
+  encryption/decryption added via mbedTLS with NIST-vector and wrong-tag tests.
 - Secure-store adapter interface. C ABI adapter wrapper started in
   `native/src/secure_store.cpp` with mock-backed tests.
 - User-code plus shard CEK derivation and shard expiry checks started in

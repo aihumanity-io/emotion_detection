@@ -10,6 +10,19 @@
 namespace emotion {
 namespace native_sdk {
 
+struct AesGcmDecryptResult {
+  bool ok = false;
+  std::vector<uint8_t> plaintext;
+  std::string error;
+};
+
+struct AesGcmEncryptResult {
+  bool ok = false;
+  std::vector<uint8_t> ciphertext;
+  std::vector<uint8_t> tag;
+  std::string error;
+};
+
 std::array<uint8_t, 32> sha256(const uint8_t* data, size_t data_len);
 std::array<uint8_t, 32> sha256(const std::vector<uint8_t>& data);
 
@@ -34,6 +47,17 @@ std::vector<uint8_t> hkdf_sha256(const std::vector<uint8_t>& ikm,
                                  const std::vector<uint8_t>& salt,
                                  const std::vector<uint8_t>& info,
                                  size_t output_len);
+
+AesGcmEncryptResult aes_256_gcm_encrypt(const std::array<uint8_t, 32>& key,
+                                        const std::vector<uint8_t>& nonce,
+                                        const std::vector<uint8_t>& aad,
+                                        const std::vector<uint8_t>& plaintext,
+                                        size_t tag_len);
+AesGcmDecryptResult aes_256_gcm_decrypt(const std::array<uint8_t, 32>& key,
+                                        const std::vector<uint8_t>& nonce,
+                                        const std::vector<uint8_t>& aad,
+                                        const std::vector<uint8_t>& ciphertext,
+                                        const std::vector<uint8_t>& tag);
 
 bool verify_sha256_hex(const uint8_t* data,
                        size_t data_len,
