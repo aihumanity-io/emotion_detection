@@ -331,7 +331,9 @@ Tests/gates:
 
 Deliverables:
 
-- Swift SDK wrapping the core ABI.
+- Swift SDK wrapping the core ABI. Started as a standalone SwiftPM package under
+  `apple/EmotionNativeSDK` with lifecycle/status/image/prediction types and a
+  test fake for the native core boundary.
 - iOS/macOS camera and Vision face detection adapters.
 - Keychain adapter integration.
 - XCFramework/SPM/CocoaPods packaging.
@@ -339,7 +341,8 @@ Deliverables:
 
 Tests/gates:
 
-- XCTest pass.
+- XCTest pass. SwiftPM tests cover lifecycle call ordering and failure-state
+  handling for the Apple SDK wrapper.
 - Still-image inference test.
 - Camera smoke test.
 - Flutter iOS/macOS smoke test where available.
