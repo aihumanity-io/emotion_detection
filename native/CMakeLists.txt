@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.14)
 project(emotion_native_contract LANGUAGES C CXX)
 
 option(EMOTION_SDK_BUILD_TESTS "Build native SDK contract tests" ON)
+option(EMOTION_ENABLE_ONNX_RUNTIME "Link native SDK against ONNX Runtime" OFF)
+set(ONNXRUNTIME_ROOT "" CACHE PATH "ONNX Runtime package root")
 
 include(FetchContent)
 FetchContent_Declare(
@@ -49,6 +51,24 @@ target_include_directories(emotion_native_core PRIVATE
 target_link_libraries(emotion_native_core PRIVATE
   mbedcrypto
   nlohmann_json::nlohmann_json)
+if(EMOTION_ENABLE_ONNX_RUNTIME)
+  if(NOT ONNXRUNTIME_ROOT)
+    message(FATAL_ERROR "ONNXRUNTIME_ROOT is required when EMOTION_ENABLE_ONNX_RUNTIME=ON")
+  endif()
+  target_compile_definitions(emotion_native_core PUBLIC EMOTION_ENABLE_ONNX_RUNTIME=1)
+  target_include_directories(emotion_native_core PRIVATE
+    "${ONNXRUNTIME_ROOT}/include")
+  find_library(ONNXRUNTIME_LIBRARY
+    NAMES onnxruntime
+    PATHS "${ONNXRUNTIME_ROOT}/lib"
+    NO_DEFAULT_PATH)
+  if(NOT ONNXRUNTIME_LIBRARY)
+    message(FATAL_ERROR "onnxruntime library not found under ${ONNXRUNTIME_ROOT}/lib")
+  endif()
+  target_link_libraries(emotion_native_core PRIVATE "${ONNXRUNTIME_LIBRARY}")
+else()
+  target_compile_definitions(emotion_native_core PUBLIC EMOTION_ENABLE_ONNX_RUNTIME=0)
+endif()
 set_target_properties(emotion_native_core PROPERTIES
   CXX_STANDARD 11
   CXX_STANDARD_REQUIRED YES

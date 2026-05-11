@@ -312,7 +312,8 @@ Deliverables:
 - Warmup, predict, unload lifecycle. Started with `RuntimeSession` and a fake
   runtime test double.
 - ONNX Runtime adapter. Boundary added with a fail-closed unsupported adapter
-  until ONNX Runtime is linked.
+  until ONNX Runtime is linked. Optional C API wiring is available with
+  `EMOTION_ENABLE_ONNX_RUNTIME=ON` and `ONNXRUNTIME_ROOT`.
 - C/C++ sample for still-image prediction.
 
 Tests/gates:
