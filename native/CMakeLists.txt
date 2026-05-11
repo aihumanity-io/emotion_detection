@@ -151,6 +151,14 @@ set_target_properties(emotion_still_image_sample PROPERTIES
   CXX_STANDARD_REQUIRED YES
   CXX_EXTENSIONS NO)
 
+add_executable(emotion_benchmark_image
+  samples/benchmark_image.cpp)
+target_link_libraries(emotion_benchmark_image PRIVATE emotion_native_core)
+set_target_properties(emotion_benchmark_image PROPERTIES
+  CXX_STANDARD 11
+  CXX_STANDARD_REQUIRED YES
+  CXX_EXTENSIONS NO)
+
 if(EMOTION_SDK_BUILD_TESTS)
   enable_testing()
 
@@ -346,6 +354,15 @@ if(EMOTION_SDK_BUILD_TESTS)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/resources/sample_rgb.ppm")
   set_tests_properties(emotion_still_image_sample_test PROPERTIES
     PASS_REGULAR_EXPRESSION "top_label_index=4")
+
+  add_test(NAME emotion_benchmark_image_test
+    COMMAND emotion_benchmark_image
+      "${CMAKE_CURRENT_SOURCE_DIR}/../test/resources/model_manifests/valid_fer2025.json"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/resources/sample_rgb.ppm"
+      "3")
+  set_tests_properties(emotion_benchmark_image_test PROPERTIES
+    PASS_REGULAR_EXPRESSION
+      "benchmark iterations=3 .*load_time_us=[0-9]+ .*warmup_time_us=[0-9]+ .*predict_avg_us=[0-9]+ .*top_label_index=4 .*scores_count=5")
 
   if(EMOTION_SDK_BUILD_INSTALLABLE)
     add_test(NAME emotion_cmake_package_smoke

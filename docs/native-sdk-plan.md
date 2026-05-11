@@ -407,7 +407,9 @@ Deliverables:
 - Raspberry Pi ARM64 build path. Started with a CMake preset, ARM64 Linux
   toolchain file, and `native/scripts/build-rpi-aarch64.sh` helper for
   `aarch64-linux-gnu` cross builds.
-- CLI and benchmark samples.
+- CLI and benchmark samples. Started with `emotion_benchmark_image`, a native
+  still-image benchmark CLI that reports load, warmup, and average prediction
+  timing fields.
 
 Tests/gates:
 
@@ -416,7 +418,8 @@ Tests/gates:
   that validates the Raspberry Pi ARM64 build path without requiring the cross
   compiler on host-only CI.
 - Image inference golden test.
-- RPi benchmark report: load time, latency, FPS, memory.
+- RPi benchmark report: load time, latency, FPS, memory. Added CTest smoke
+  coverage for the host benchmark output schema before RPi-specific runs.
 
 ### Phase 6: Flutter Cleanup
 
