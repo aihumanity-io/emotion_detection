@@ -442,6 +442,7 @@ Tests/gates:
 
 - `flutter analyze`.
 - `flutter test`.
+- Method-channel payload tests for the concrete platform wrapper.
 - Example app smoke tests on available platforms.
 - API compatibility notes.
 
