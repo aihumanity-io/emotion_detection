@@ -15,6 +15,10 @@ import java.io.FileInputStream
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import com.tartalabs.crypto.LicenseManager
+import com.tartalabs.emotiondetection.sdk.EmotionFlutterBridgeException
+import com.tartalabs.emotiondetection.sdk.EmotionPredictPayload
+import com.tartalabs.emotiondetection.sdk.EmotionRegisterModelPayload
+import com.tartalabs.emotiondetection.sdk.EmotionUserCodePayload
 import android.util.Base64
 import org.json.JSONObject
 
@@ -100,19 +104,19 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
       }
 
     } else if(call.method == "setUserCode") {
-      val userCodeB64 = call.argument<String>("userCodeB64")
-      val modelIdArg = call.argument<String>("modelId")
-      if (userCodeB64.isNullOrBlank()) {
-        result.error("invalid_args", "userCodeB64 is required", null)
+      val payload = try {
+        EmotionUserCodePayload.from(call.arguments)
+      } catch (e: EmotionFlutterBridgeException) {
+        result.error("invalid_args", e.message, null)
         return
       }
       try {
-        val decoded = Base64.decode(userCodeB64.trim(), Base64.NO_WRAP)
+        val decoded = Base64.decode(payload.userCodeBase64.trim(), Base64.NO_WRAP)
         if (decoded.size != 32) {
           result.error("invalid_length", "userCode must be 32 bytes", null)
           return
         }
-        licMgr.saveUserCode(decoded, modelIdArg)
+        licMgr.saveUserCode(decoded, payload.modelId)
         result.success(null)
       } catch (e: IllegalArgumentException) {
         result.error("invalid_base64", "Failed to decode userCodeB64", e.localizedMessage)
@@ -194,12 +198,17 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
       licMgr.clearModelLicense(modelIdArg)
       result.success(null)
     } else if (call.method == "registerModel") {
-      val modelId = call.argument<String>("modelId") ?: run {
-        result.error("invalid_args", "modelId is required", null); return
+      val payload = try {
+        EmotionRegisterModelPayload.from(call.arguments)
+      } catch (e: EmotionFlutterBridgeException) {
+        result.error("invalid_args", e.message, null)
+        return
       }
-      val resourceBase = call.argument<String>("resourceBase") ?: modelId
-      val encExt = call.argument<String>("encExt") ?: "onnx.enc"
-      specs[modelId] = ModelSpec(modelId = modelId, resourceBase = resourceBase, encExt = encExt)
+      specs[payload.modelId] = ModelSpec(
+        modelId = payload.modelId,
+        resourceBase = payload.resourceBase,
+        encExt = payload.encryptedExtension
+      )
       result.success(null)
     } else if (call.method == "warmUp") {
       val modelId = call.argument<String>("modelId") ?: run {
@@ -213,11 +222,14 @@ class EmotionDetectionPlugin: FlutterPlugin, MethodCallHandler {
         result.error("model_load_error", e.message, e.localizedMessage)
       }
     } else if (call.method == "predict") {
-      val modelId = call.argument<String>("modelId") ?: run {
-        result.error("invalid_args", "modelId is required", null); return
+      val payload = try {
+        EmotionPredictPayload.from(call.arguments)
+      } catch (e: EmotionFlutterBridgeException) {
+        result.error("invalid_args", e.message, null)
+        return
       }
       try {
-        val predictor = ensureModel(modelId)
+        val predictor = ensureModel(payload.modelId)
         val emotionResult = predictor.handlePrediction(call, result)
         if (emotionResult.isNotEmpty()) {
           result.success(emotionResult)

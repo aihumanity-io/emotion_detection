@@ -372,7 +372,9 @@ Deliverables:
   `EmotionSecureStore` boundary and `AndroidKeystoreSecureStore` adapter over
   the existing encrypted `SecretStore`.
 - AAR/Maven packaging.
-- Flutter Android plugin migrated to Kotlin SDK.
+- Flutter Android plugin migrated to Kotlin SDK. Added shared Kotlin payload
+  parsers for register, predict, and user-code method-channel arguments and
+  wired the plugin handlers through them.
 
 Tests/gates:
 
@@ -383,6 +385,8 @@ Tests/gates:
   isolation, and invalid input failures.
 - Android camera JVM smoke tests cover no-face skip, face-detected prediction,
   and frame source start/stop behavior.
+- Android Flutter bridge JVM tests cover register, predict, and user-code
+  argument parsing before deeper runtime migration.
 - Instrumented JNI/decryption/inference smoke tests.
 - Flutter Android integration smoke test.
 
