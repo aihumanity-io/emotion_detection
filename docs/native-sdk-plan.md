@@ -443,7 +443,8 @@ Tests/gates:
 - `flutter analyze`.
 - `flutter test`.
 - Method-channel payload tests for the concrete platform wrapper.
-- Example app smoke tests on available platforms.
+- Example app smoke tests on available platforms. Added a widget smoke that
+  boots the example through the public plugin API with a fake platform wrapper.
 - API compatibility notes.
 
 ### Phase 7: Web Evaluation And SDK
