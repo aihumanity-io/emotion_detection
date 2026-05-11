@@ -402,7 +402,8 @@ Deliverables:
   `WindowsSecureStore` adapter that persists user-scoped protected blobs
   without requiring Windows Hello or biometrics.
 - Linux secure-store adapter and documented dev fallback. Started with an
-  explicit file-backed `FileSecureStore` adapter for development and test
+  optional `LinuxSecretStore` libsecret adapter for production Linux desktops
+  plus explicit file-backed `FileSecureStore` support for development and test
   environments where libsecret/keyring is not available.
 - Raspberry Pi ARM64 build path. Started with a CMake preset, ARM64 Linux
   toolchain file, and `native/scripts/build-rpi-aarch64.sh` helper for
@@ -414,6 +415,9 @@ Deliverables:
 Tests/gates:
 
 - CTest on desktop, including install-and-consume package smoke coverage.
+- Linux secure-store tests cover fail-closed behavior without libsecret and a
+  best-effort real Secret Service round trip when built with
+  `EMOTION_ENABLE_LIBSECRET=ON`.
 - Cross-compile or native ARM64 build. Added preset/toolchain smoke coverage
   that validates the Raspberry Pi ARM64 build path without requiring the cross
   compiler on host-only CI.

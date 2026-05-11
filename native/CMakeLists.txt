@@ -5,11 +5,16 @@ project(emotion_native_contract VERSION 0.1.0 LANGUAGES C CXX)
 option(EMOTION_SDK_BUILD_TESTS "Build native SDK contract tests" ON)
 option(EMOTION_SDK_BUILD_INSTALLABLE "Build installable native SDK package target" ON)
 option(EMOTION_ENABLE_ONNX_RUNTIME "Link native SDK against ONNX Runtime" OFF)
+option(EMOTION_ENABLE_LIBSECRET "Link Linux SDK secure store against libsecret" OFF)
 set(ONNXRUNTIME_ROOT "" CACHE PATH "ONNX Runtime package root")
 
 include(CMakePackageConfigHelpers)
 include(FetchContent)
 include(GNUInstallDirs)
+if(EMOTION_ENABLE_LIBSECRET)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(LIBSECRET REQUIRED IMPORTED_TARGET libsecret-1)
+endif()
 FetchContent_Declare(
   nlohmann_json
   URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
@@ -37,6 +42,7 @@ set(EMOTION_NATIVE_CORE_SOURCES
   src/crypto_aes_gcm.cpp
   src/decrypt_pipeline.cpp
   src/file_secure_store.cpp
+  src/linux_secret_store.cpp
   src/windows_secure_store.cpp
   src/crypto_sha256.cpp
   src/key_material.cpp
@@ -61,6 +67,12 @@ target_include_directories(emotion_native_core PRIVATE
 target_link_libraries(emotion_native_core PRIVATE
   mbedcrypto
   nlohmann_json::nlohmann_json)
+if(EMOTION_ENABLE_LIBSECRET)
+  target_compile_definitions(emotion_native_core PUBLIC EMOTION_ENABLE_LIBSECRET=1)
+  target_link_libraries(emotion_native_core PRIVATE PkgConfig::LIBSECRET)
+else()
+  target_compile_definitions(emotion_native_core PUBLIC EMOTION_ENABLE_LIBSECRET=0)
+endif()
 if(WIN32)
   target_link_libraries(emotion_native_core PRIVATE Crypt32)
 endif()
@@ -99,6 +111,12 @@ if(EMOTION_SDK_BUILD_INSTALLABLE)
   target_link_libraries(emotion_sdk PRIVATE
     mbedcrypto
     nlohmann_json::nlohmann_json)
+  if(EMOTION_ENABLE_LIBSECRET)
+    target_compile_definitions(emotion_sdk PUBLIC EMOTION_ENABLE_LIBSECRET=1)
+    target_link_libraries(emotion_sdk PRIVATE PkgConfig::LIBSECRET)
+  else()
+    target_compile_definitions(emotion_sdk PUBLIC EMOTION_ENABLE_LIBSECRET=0)
+  endif()
   if(WIN32)
     target_link_libraries(emotion_sdk PRIVATE Crypt32)
   endif()
@@ -251,6 +269,15 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_file_secure_store_test COMMAND emotion_file_secure_store_test)
+
+  add_executable(emotion_linux_secret_store_test
+    tests/linux_secret_store_test.cpp)
+  target_link_libraries(emotion_linux_secret_store_test PRIVATE emotion_native_core)
+  set_target_properties(emotion_linux_secret_store_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_linux_secret_store_test COMMAND emotion_linux_secret_store_test)
 
   add_executable(emotion_windows_secure_store_test
     tests/windows_secure_store_test.cpp)
