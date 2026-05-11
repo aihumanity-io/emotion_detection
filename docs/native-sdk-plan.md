@@ -340,7 +340,9 @@ Deliverables:
   `KeychainSecureStore` implementation with injectable Security client.
 - XCFramework/SPM/CocoaPods packaging. SwiftPM package is in place; local
   CocoaPods metadata added at `apple/EmotionNativeSDK/EmotionNativeSDK.podspec`.
-- Flutter Apple plugin migrated to Swift SDK.
+- Flutter Apple plugin migrated to Swift SDK. iOS/macOS podspecs now compile
+  shared Apple SDK Swift sources, and Flutter method-channel payload parsing has
+  shared SwiftPM-tested types.
 
 Tests/gates:
 
@@ -352,6 +354,8 @@ Tests/gates:
   the Apple SDK wrapper through fake-core prediction.
 - Camera smoke test. SwiftPM fake-frame tests cover no-face skip, face-detected
   prediction, and frame source start/stop behavior.
+- Flutter channel payload tests cover register, predict, and user-code argument
+  parsing before plugin handlers migrate call sites.
 - Flutter iOS/macOS smoke test where available.
 
 ### Phase 4: Android SDK

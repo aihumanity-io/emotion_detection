@@ -14,7 +14,7 @@ A new Flutter plugin project.
   s.author           = { 'Your Company' => 'email@example.com' }
 
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  s.source_files = 'Classes/**/*', '../apple/EmotionNativeSDK/Sources/EmotionNativeSDK/**/*.swift'
   s.static_framework = true
 
   # If your plugin requires a privacy manifest, for example if it collects user
@@ -30,7 +30,7 @@ A new Flutter plugin project.
   # onnxruntime-objc 1.20.0 requires macOS 11.0+.
   s.platform = :osx, '11.0'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
-  s.swift_version = '5.0'
+  s.swift_version = '5.7'
 
   # Reuse encrypted model assets from the iOS directory via a dedicated bundle.
   s.resource_bundles = {
