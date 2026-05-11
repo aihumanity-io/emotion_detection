@@ -357,4 +357,8 @@ if(EMOTION_SDK_BUILD_TESTS)
         -DEMOTION_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake_package_smoke/run.cmake)
   endif()
+
+  add_test(NAME emotion_rpi_toolchain_smoke
+    COMMAND ${CMAKE_COMMAND}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/rpi_toolchain_smoke/run.cmake)
 endif()

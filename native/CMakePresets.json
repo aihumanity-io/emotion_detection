@@ -1,0 +1,49 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "host-release",
+      "displayName": "Host release",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/../build/native-host-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "EMOTION_SDK_BUILD_TESTS": "ON",
+        "EMOTION_SDK_BUILD_INSTALLABLE": "ON",
+        "EMOTION_ENABLE_ONNX_RUNTIME": "OFF"
+      }
+    },
+    {
+      "name": "rpi-aarch64-release",
+      "displayName": "Raspberry Pi ARM64 release",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/../build/native-rpi-aarch64-release",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/raspberry-pi-aarch64.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "EMOTION_SDK_BUILD_TESTS": "OFF",
+        "EMOTION_SDK_BUILD_INSTALLABLE": "ON",
+        "EMOTION_ENABLE_ONNX_RUNTIME": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "host-release",
+      "configurePreset": "host-release"
+    },
+    {
+      "name": "rpi-aarch64-release",
+      "configurePreset": "rpi-aarch64-release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "host-release",
+      "configurePreset": "host-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

@@ -404,13 +404,17 @@ Deliverables:
 - Linux secure-store adapter and documented dev fallback. Started with an
   explicit file-backed `FileSecureStore` adapter for development and test
   environments where libsecret/keyring is not available.
-- Raspberry Pi ARM64 build path.
+- Raspberry Pi ARM64 build path. Started with a CMake preset, ARM64 Linux
+  toolchain file, and `native/scripts/build-rpi-aarch64.sh` helper for
+  `aarch64-linux-gnu` cross builds.
 - CLI and benchmark samples.
 
 Tests/gates:
 
 - CTest on desktop, including install-and-consume package smoke coverage.
-- Cross-compile or native ARM64 build.
+- Cross-compile or native ARM64 build. Added preset/toolchain smoke coverage
+  that validates the Raspberry Pi ARM64 build path without requiring the cross
+  compiler on host-only CI.
 - Image inference golden test.
 - RPi benchmark report: load time, latency, FPS, memory.
 
