@@ -59,4 +59,68 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
   Future<void> clearUserCode(String userName, {String? modelId}) {
     return instance.clearUserCode(userName, modelId: modelId);
   }
+
+  void configureModelRuntimeChannel(String methodChannelName) {
+    return instance.configureModelRuntimeChannel(methodChannelName);
+  }
+
+  Future<void> registerModel({
+    required String modelId,
+    required String resourceBase,
+    String encExt = 'onnx.enc',
+    String hkdfInfo = 'model_runtime',
+    String? masterKeyB64,
+  }) {
+    return instance.registerModel(
+      modelId: modelId,
+      resourceBase: resourceBase,
+      encExt: encExt,
+      hkdfInfo: hkdfInfo,
+      masterKeyB64: masterKeyB64,
+    );
+  }
+
+  Future<void> setKeyShard({
+    required String modelId,
+    required String keyShardB64,
+    int? expiresAtMs,
+    String? userName,
+  }) {
+    return instance.setKeyShard(
+      modelId: modelId,
+      keyShardB64: keyShardB64,
+      expiresAtMs: expiresAtMs,
+      userName: userName,
+    );
+  }
+
+  Future<void> clearKeyShard(String modelId) {
+    return instance.clearKeyShard(modelId);
+  }
+
+  Future<void> setModelLicense({
+    required String modelId,
+    required Map<String, dynamic> license,
+  }) {
+    return instance.setModelLicense(modelId: modelId, license: license);
+  }
+
+  Future<void> clearModelLicense(String modelId) {
+    return instance.clearModelLicense(modelId);
+  }
+
+  Future<bool> warmUp(String modelId) {
+    return instance.warmUp(modelId);
+  }
+
+  Future<Map<String, dynamic>> predict(
+    String modelId,
+    Map<String, dynamic> inputs,
+  ) {
+    return instance.predict(modelId, inputs);
+  }
+
+  Future<void> unload(String modelId) {
+    return instance.unload(modelId);
+  }
 }

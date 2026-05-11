@@ -1,11 +1,8 @@
-// lib/model_runtime.dart
-import 'package:flutter/services.dart';
+import '../emotion_detection_platform_interface.dart';
 
 class ModelRuntime {
-  static MethodChannel _ch = const MethodChannel('face_emotion_detection');
-
   ModelRuntime(String methodChStr) {
-    _ch = MethodChannel(methodChStr);
+    EmotionDetectionPlatform.instance.configureModelRuntimeChannel(methodChStr);
   }
 
   static Future<void> registerModel({
@@ -15,52 +12,50 @@ class ModelRuntime {
     String hkdfInfo = 'model_runtime',
     String? masterKeyB64, // optional; prefer server shard
   }) =>
-      _ch.invokeMethod('registerModel', {
-        'modelId': modelId,
-        'resourceBase': resourceBase,
-        'encExt': encExt,
-        'hkdfInfo': hkdfInfo,
-        'masterKeyB64': masterKeyB64,
-      });
+      EmotionDetectionPlatform.instance.registerModel(
+        modelId: modelId,
+        resourceBase: resourceBase,
+        encExt: encExt,
+        hkdfInfo: hkdfInfo,
+        masterKeyB64: masterKeyB64,
+      );
 
-  static Future<void> setKeyShard(
-          {required String modelId,
-          required String keyShardB64,
-          int? expiresAtMs,
-          String? userName}) =>
-      _ch.invokeMethod('setKeyShard', {
-        'modelId': modelId,
-        'keyShardB64': keyShardB64,
-        if (expiresAtMs != null) 'expiresAtMs': expiresAtMs,
-        if (userName != null) 'userName': userName,
-      });
+  static Future<void> setKeyShard({
+    required String modelId,
+    required String keyShardB64,
+    int? expiresAtMs,
+    String? userName,
+  }) =>
+      EmotionDetectionPlatform.instance.setKeyShard(
+        modelId: modelId,
+        keyShardB64: keyShardB64,
+        expiresAtMs: expiresAtMs,
+        userName: userName,
+      );
 
   static Future<void> clearKeyShard(String modelId) =>
-      _ch.invokeMethod('clearKeyShard', {'modelId': modelId});
+      EmotionDetectionPlatform.instance.clearKeyShard(modelId);
 
   static Future<void> setModelLicense({
     required String modelId,
     required Map<String, dynamic> license,
   }) =>
-      _ch.invokeMethod('setModelLicense', {
-        'modelId': modelId,
-        'license': license,
-      });
+      EmotionDetectionPlatform.instance.setModelLicense(
+        modelId: modelId,
+        license: license,
+      );
 
   static Future<void> clearModelLicense(String modelId) =>
-      _ch.invokeMethod('clearModelLicense', {'modelId': modelId});
+      EmotionDetectionPlatform.instance.clearModelLicense(modelId);
 
   static Future<bool> warmUp(String modelId) async =>
-      (await _ch.invokeMethod('warmUp', {'modelId': modelId})) == true;
+      EmotionDetectionPlatform.instance.warmUp(modelId);
 
   /// Inputs: numbers, Float32List (as {'f32': list, 'shape':[...]}), or BGRA image bytes {'bgra': bytes,'width':W,'height':H}
   static Future<Map<String, dynamic>> predict(
-      String modelId, Map<String, dynamic> inputs) async {
-    final out = await _ch
-        .invokeMethod<Map>('predict', {'modelId': modelId, 'inputs': inputs});
-    return Map<String, dynamic>.from(out ?? const {});
-  }
+          String modelId, Map<String, dynamic> inputs) =>
+      EmotionDetectionPlatform.instance.predict(modelId, inputs);
 
   static Future<void> unload(String modelId) =>
-      _ch.invokeMethod('unload', {'modelId': modelId});
+      EmotionDetectionPlatform.instance.unload(modelId);
 }

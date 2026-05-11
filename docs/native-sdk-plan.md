@@ -432,7 +432,8 @@ Deliverables:
 - Flutter package becomes a wrapper around platform SDKs. Started by moving
   macOS camera stream and preview controls behind `EmotionDetectionPlatform`
   instead of direct public API method-channel calls. User-code storage now also
-  delegates through the platform interface.
+  delegates through the platform interface, and `ModelRuntime` provisioning and
+  prediction lifecycle calls are routed through the same platform boundary.
 - Public Dart API preserved where possible.
 - `EmotionDetectorView` uses platform SDKs consistently.
 - Documentation updated for native and Flutter installs.

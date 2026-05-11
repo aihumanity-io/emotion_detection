@@ -13,6 +13,10 @@ class MethodChannelEmotionDetection extends EmotionDetectionPlatform {
   final cameraEventChannel =
       const EventChannel('face_emotion_detection/camera');
 
+  @visibleForTesting
+  MethodChannel modelRuntimeMethodChannel =
+      const MethodChannel('face_emotion_detection');
+
   @override
   Future<String?> getPlatformVersion() async {
     final version =
@@ -60,5 +64,98 @@ class MethodChannelEmotionDetection extends EmotionDetectionPlatform {
       'userName': userName,
       if (modelId != null) 'modelId': modelId,
     });
+  }
+
+  @override
+  void configureModelRuntimeChannel(String methodChannelName) {
+    modelRuntimeMethodChannel = MethodChannel(methodChannelName);
+  }
+
+  @override
+  Future<void> registerModel({
+    required String modelId,
+    required String resourceBase,
+    String encExt = 'onnx.enc',
+    String hkdfInfo = 'model_runtime',
+    String? masterKeyB64,
+  }) {
+    return modelRuntimeMethodChannel.invokeMethod<void>('registerModel', {
+      'modelId': modelId,
+      'resourceBase': resourceBase,
+      'encExt': encExt,
+      'hkdfInfo': hkdfInfo,
+      'masterKeyB64': masterKeyB64,
+    });
+  }
+
+  @override
+  Future<void> setKeyShard({
+    required String modelId,
+    required String keyShardB64,
+    int? expiresAtMs,
+    String? userName,
+  }) {
+    return modelRuntimeMethodChannel.invokeMethod<void>('setKeyShard', {
+      'modelId': modelId,
+      'keyShardB64': keyShardB64,
+      if (expiresAtMs != null) 'expiresAtMs': expiresAtMs,
+      if (userName != null) 'userName': userName,
+    });
+  }
+
+  @override
+  Future<void> clearKeyShard(String modelId) {
+    return modelRuntimeMethodChannel.invokeMethod<void>(
+      'clearKeyShard',
+      {'modelId': modelId},
+    );
+  }
+
+  @override
+  Future<void> setModelLicense({
+    required String modelId,
+    required Map<String, dynamic> license,
+  }) {
+    return modelRuntimeMethodChannel.invokeMethod<void>('setModelLicense', {
+      'modelId': modelId,
+      'license': license,
+    });
+  }
+
+  @override
+  Future<void> clearModelLicense(String modelId) {
+    return modelRuntimeMethodChannel.invokeMethod<void>(
+      'clearModelLicense',
+      {'modelId': modelId},
+    );
+  }
+
+  @override
+  Future<bool> warmUp(String modelId) async {
+    return await modelRuntimeMethodChannel.invokeMethod<bool>(
+          'warmUp',
+          {'modelId': modelId},
+        ) ==
+        true;
+  }
+
+  @override
+  Future<Map<String, dynamic>> predict(
+    String modelId,
+    Map<String, dynamic> inputs,
+  ) async {
+    final out = await modelRuntimeMethodChannel.invokeMethod<Map>(
+      'predict',
+      {'modelId': modelId, 'inputs': inputs},
+    );
+    return Map<String, dynamic>.from(out ?? const {});
+  }
+
+  @override
+  Future<void> unload(String modelId) {
+    return modelRuntimeMethodChannel.invokeMethod<void>(
+      'unload',
+      {'modelId': modelId},
+    );
   }
 }
