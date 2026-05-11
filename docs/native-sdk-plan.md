@@ -395,7 +395,9 @@ Tests/gates:
 
 Deliverables:
 
-- C/C++ SDK package.
+- C/C++ SDK package. Started with an installable CMake package target,
+  exported `EmotionNativeSDK::emotion_sdk`, installed public headers, and a
+  package-consumer smoke test.
 - Windows secure-store adapter.
 - Linux secure-store adapter and documented dev fallback.
 - Raspberry Pi ARM64 build path.
@@ -403,7 +405,7 @@ Deliverables:
 
 Tests/gates:
 
-- CTest on desktop.
+- CTest on desktop, including install-and-consume package smoke coverage.
 - Cross-compile or native ARM64 build.
 - Image inference golden test.
 - RPi benchmark report: load time, latency, FPS, memory.

@@ -1,12 +1,15 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(emotion_native_contract LANGUAGES C CXX)
+project(emotion_native_contract VERSION 0.1.0 LANGUAGES C CXX)
 
 option(EMOTION_SDK_BUILD_TESTS "Build native SDK contract tests" ON)
+option(EMOTION_SDK_BUILD_INSTALLABLE "Build installable native SDK package target" ON)
 option(EMOTION_ENABLE_ONNX_RUNTIME "Link native SDK against ONNX Runtime" OFF)
 set(ONNXRUNTIME_ROOT "" CACHE PATH "ONNX Runtime package root")
 
+include(CMakePackageConfigHelpers)
 include(FetchContent)
+include(GNUInstallDirs)
 FetchContent_Declare(
   nlohmann_json
   URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
@@ -27,9 +30,10 @@ FetchContent_MakeAvailable(mbedtls)
 
 add_library(emotion_sdk_headers INTERFACE)
 target_include_directories(emotion_sdk_headers INTERFACE
-  "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 
-add_library(emotion_native_core STATIC
+set(EMOTION_NATIVE_CORE_SOURCES
   src/crypto_aes_gcm.cpp
   src/decrypt_pipeline.cpp
   src/crypto_sha256.cpp
@@ -45,8 +49,11 @@ add_library(emotion_native_core STATIC
   src/runtime_session.cpp
   src/sdk.cpp
   src/secure_store.cpp)
+
+add_library(emotion_native_core STATIC ${EMOTION_NATIVE_CORE_SOURCES})
 target_include_directories(emotion_native_core PUBLIC
-  "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_include_directories(emotion_native_core PRIVATE
   "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5/include")
 target_link_libraries(emotion_native_core PRIVATE
@@ -74,6 +81,59 @@ set_target_properties(emotion_native_core PROPERTIES
   CXX_STANDARD 11
   CXX_STANDARD_REQUIRED YES
   CXX_EXTENSIONS NO)
+
+if(EMOTION_SDK_BUILD_INSTALLABLE)
+  add_library(emotion_sdk SHARED ${EMOTION_NATIVE_CORE_SOURCES})
+  add_library(EmotionNativeSDK::emotion_sdk ALIAS emotion_sdk)
+  target_include_directories(emotion_sdk PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
+  target_include_directories(emotion_sdk PRIVATE
+    "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5/include")
+  target_compile_definitions(emotion_sdk PRIVATE EMOTION_SDK_BUILDING_SHARED)
+  target_link_libraries(emotion_sdk PRIVATE
+    mbedcrypto
+    nlohmann_json::nlohmann_json)
+  if(EMOTION_ENABLE_ONNX_RUNTIME)
+    target_compile_definitions(emotion_sdk PUBLIC EMOTION_ENABLE_ONNX_RUNTIME=1)
+    target_include_directories(emotion_sdk PRIVATE
+      "${ONNXRUNTIME_ROOT}/include")
+    target_link_libraries(emotion_sdk PRIVATE "${ONNXRUNTIME_LIBRARY}")
+  else()
+    target_compile_definitions(emotion_sdk PUBLIC EMOTION_ENABLE_ONNX_RUNTIME=0)
+  endif()
+  set_target_properties(emotion_sdk PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO
+    OUTPUT_NAME emotion_sdk
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR})
+
+  install(TARGETS emotion_sdk
+    EXPORT EmotionNativeSDKTargets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  install(EXPORT EmotionNativeSDKTargets
+    FILE EmotionNativeSDKTargets.cmake
+    NAMESPACE EmotionNativeSDK::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/EmotionNativeSDK)
+
+  configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmotionNativeSDKConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/EmotionNativeSDKConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/EmotionNativeSDK)
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/EmotionNativeSDKConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion)
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/EmotionNativeSDKConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/EmotionNativeSDKConfigVersion.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/EmotionNativeSDK)
+endif()
 
 add_executable(emotion_still_image_sample
   samples/still_image_predict.cpp)
@@ -256,4 +316,15 @@ if(EMOTION_SDK_BUILD_TESTS)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/resources/sample_rgb.ppm")
   set_tests_properties(emotion_still_image_sample_test PROPERTIES
     PASS_REGULAR_EXPRESSION "top_label_index=4")
+
+  if(EMOTION_SDK_BUILD_INSTALLABLE)
+    add_test(NAME emotion_cmake_package_smoke
+      COMMAND ${CMAKE_COMMAND}
+        -DEMOTION_NATIVE_BINARY_DIR=${CMAKE_BINARY_DIR}
+        -DEMOTION_SMOKE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake_package_smoke
+        -DEMOTION_INSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}
+        -DEMOTION_BUILD_CONFIG=$<CONFIG>
+        -DEMOTION_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake_package_smoke/run.cmake)
+  endif()
 endif()
