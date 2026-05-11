@@ -152,6 +152,8 @@ class _FakeEmotionDetectionPlatform
   }
 }
 
+class _UnimplementedFaceEmotionPlatform extends EmotionDetectionPlatform {}
+
 void main() {
   test('getPlatformVersion delegates to platform implementation', () async {
     EmotionDetectionPlatform.instance = _FakeEmotionDetectionPlatform();
@@ -295,5 +297,15 @@ void main() {
     expect(platform.faceEmotionInputs, <String, dynamic>{
       'faceImageData': <int>[1, 2, 3],
     });
+  });
+
+  test('face emotion fails clearly when a platform has not implemented it',
+      () async {
+    EmotionDetectionPlatform.instance = _UnimplementedFaceEmotionPlatform();
+
+    expect(
+      () => EmotionDetectionPlatform.instance.faceEmotion(<String, dynamic>{}),
+      throwsA(isA<UnimplementedError>()),
+    );
   });
 }

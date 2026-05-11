@@ -125,6 +125,6 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
   }
 
   Future<Map?> faceEmotion(Map<String, dynamic> inputs) {
-    return instance.faceEmotion(inputs);
+    throw UnimplementedError('faceEmotion() has not been implemented.');
   }
 }
