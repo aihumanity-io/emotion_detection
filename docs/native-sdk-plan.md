@@ -366,7 +366,9 @@ Deliverables:
   `EmotionNativeSdk` wrapper with core lifecycle, model registration, image, and
   prediction types before JNI binding.
 - CameraX and ML Kit adapters.
-- Android Keystore adapter integration.
+- Android Keystore adapter integration. Added a JVM-testable
+  `EmotionSecureStore` boundary and `AndroidKeystoreSecureStore` adapter over
+  the existing encrypted `SecretStore`.
 - AAR/Maven packaging.
 - Flutter Android plugin migrated to Kotlin SDK.
 
@@ -375,6 +377,8 @@ Tests/gates:
 - JVM tests. Added fake-core Kotlin lifecycle tests for call ordering,
   unregistered prediction failures, failed register rollback, and RGB image
   validation.
+- Android secure-store JVM tests cover set/get/update/delete, namespace
+  isolation, and invalid input failures.
 - Instrumented JNI/decryption/inference smoke tests.
 - Flutter Android integration smoke test.
 
