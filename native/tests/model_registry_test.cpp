@@ -104,6 +104,18 @@ void clear_removes_all_models() {
   expect_true(registry.find("a") == nullptr, "cleared model should be missing");
 }
 
+void remove_deletes_model_entry() {
+  ModelRegistry registry;
+  registry.register_model(model_config("aih_fer2025"));
+
+  expect_true(registry.remove("aih_fer2025") == EMOTION_STATUS_OK,
+              "remove should succeed");
+  expect_true(registry.find("aih_fer2025") == nullptr,
+              "removed model should be missing");
+  expect_true(registry.remove("aih_fer2025") == EMOTION_STATUS_MODEL_NOT_FOUND,
+              "missing remove should fail");
+}
+
 }  // namespace
 
 int main() {
@@ -113,5 +125,6 @@ int main() {
   warm_and_unload_lifecycle();
   missing_model_operations_fail_closed();
   clear_removes_all_models();
+  remove_deletes_model_entry();
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -43,6 +43,7 @@ add_library(emotion_native_core STATIC
   src/postprocessing.cpp
   src/preprocessing.cpp
   src/runtime_session.cpp
+  src/sdk.cpp
   src/secure_store.cpp)
 target_include_directories(emotion_native_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -229,4 +230,15 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_onnx_runtime_adapter_test COMMAND emotion_onnx_runtime_adapter_test)
+
+  add_executable(emotion_sdk_c_api_test
+    tests/sdk_c_api_test.cpp)
+  target_link_libraries(emotion_sdk_c_api_test PRIVATE emotion_native_core)
+  target_compile_definitions(emotion_sdk_c_api_test PRIVATE
+    EMOTION_TEST_MANIFEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../test/resources/model_manifests")
+  set_target_properties(emotion_sdk_c_api_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_sdk_c_api_test COMMAND emotion_sdk_c_api_test)
 endif()

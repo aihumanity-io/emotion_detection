@@ -30,6 +30,7 @@ class ModelRegistry {
   emotion_status_t register_model(const emotion_model_config_t& config);
   emotion_status_t mark_warmed(const std::string& model_id);
   emotion_status_t unload(const std::string& model_id);
+  emotion_status_t remove(const std::string& model_id);
   void clear();
 
   const RegisteredModel* find(const std::string& model_id) const;

@@ -310,7 +310,8 @@ Deliverables:
   preprocessing, NHWC/NCHW tensors, softmax postprocessing, and C result copy
   tests.
 - Warmup, predict, unload lifecycle. Started with `RuntimeSession` and a fake
-  runtime test double.
+  runtime test double. C ABI entrypoints now wire init/register/provisioning,
+  warmup, predict, unload, and shutdown through native state.
 - ONNX Runtime adapter. Boundary added with a fail-closed unsupported adapter
   until ONNX Runtime is linked. Optional C API wiring is available with
   `EMOTION_ENABLE_ONNX_RUNTIME=ON` and `ONNXRUNTIME_ROOT`.

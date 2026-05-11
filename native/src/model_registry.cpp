@@ -49,6 +49,15 @@ emotion_status_t ModelRegistry::unload(const std::string& model_id) {
   return EMOTION_STATUS_OK;
 }
 
+emotion_status_t ModelRegistry::remove(const std::string& model_id) {
+  std::map<std::string, RegisteredModel>::iterator it = models_.find(model_id);
+  if (it == models_.end()) {
+    return EMOTION_STATUS_MODEL_NOT_FOUND;
+  }
+  models_.erase(it);
+  return EMOTION_STATUS_OK;
+}
+
 void ModelRegistry::clear() {
   models_.clear();
 }
