@@ -9,6 +9,8 @@ class _FakeEmotionDetectionPlatform
   String? streamModelId;
   String? previewModelId;
   var hidePreviewCallCount = 0;
+  Map<String, dynamic>? savedUserCode;
+  Map<String, dynamic>? clearedUserCode;
 
   @override
   Future<String?> getPlatformVersion() async => '42';
@@ -27,6 +29,29 @@ class _FakeEmotionDetectionPlatform
   @override
   Future<void> macHideCameraPreview() async {
     hidePreviewCallCount += 1;
+  }
+
+  @override
+  Future<void> saveUserCode({
+    required String userName,
+    required String userCodeB64,
+    bool requireBiometrics = false,
+    String? modelId,
+  }) async {
+    savedUserCode = <String, dynamic>{
+      'userName': userName,
+      'userCodeB64': userCodeB64,
+      'requireBiometrics': requireBiometrics,
+      'modelId': modelId,
+    };
+  }
+
+  @override
+  Future<void> clearUserCode(String userName, {String? modelId}) async {
+    clearedUserCode = <String, dynamic>{
+      'userName': userName,
+      'modelId': modelId,
+    };
   }
 }
 
@@ -61,5 +86,30 @@ void main() {
 
     expect(platform.previewModelId, 'model-b');
     expect(platform.hidePreviewCallCount, 1);
+  });
+
+  test('user code channel delegates save and clear to platform implementation',
+      () async {
+    final platform = _FakeEmotionDetectionPlatform();
+    EmotionDetectionPlatform.instance = platform;
+
+    await UserCodeChannel.saveUserCode(
+      userName: 'david',
+      userCodeB64: 'code',
+      requireBiometrics: true,
+      modelId: 'model-c',
+    );
+    await UserCodeChannel.clearUserCode('david', modelId: 'model-c');
+
+    expect(platform.savedUserCode, <String, dynamic>{
+      'userName': 'david',
+      'userCodeB64': 'code',
+      'requireBiometrics': true,
+      'modelId': 'model-c',
+    });
+    expect(platform.clearedUserCode, <String, dynamic>{
+      'userName': 'david',
+      'modelId': 'model-c',
+    });
   });
 }

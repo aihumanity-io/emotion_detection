@@ -1,9 +1,7 @@
-import 'package:flutter/services.dart';
+import '../emotion_detection_platform_interface.dart';
 
 class UserCodeChannel {
   const UserCodeChannel._();
-
-  static const MethodChannel _channel = MethodChannel('face_emotion_detection');
 
   static Future<void> saveUserCode({
     required String userName,
@@ -11,18 +9,18 @@ class UserCodeChannel {
     bool requireBiometrics = false,
     String? modelId,
   }) async {
-    await _channel.invokeMethod<void>('setUserCode', <String, dynamic>{
-      'userName': userName,
-      'userCodeB64': userCodeB64,
-      'requireBiometrics': requireBiometrics,
-      if (modelId != null) 'modelId': modelId,
-    });
+    await EmotionDetectionPlatform.instance.saveUserCode(
+      userName: userName,
+      userCodeB64: userCodeB64,
+      requireBiometrics: requireBiometrics,
+      modelId: modelId,
+    );
   }
 
   static Future<void> clearUserCode(String userName, {String? modelId}) async {
-    await _channel.invokeMethod<void>('clearUserCode', <String, dynamic>{
-      'userName': userName,
-      if (modelId != null) 'modelId': modelId,
-    });
+    await EmotionDetectionPlatform.instance.clearUserCode(
+      userName,
+      modelId: modelId,
+    );
   }
 }

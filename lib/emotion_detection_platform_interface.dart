@@ -41,4 +41,22 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
   Future<void> macHideCameraPreview() {
     return instance.macHideCameraPreview();
   }
+
+  Future<void> saveUserCode({
+    required String userName,
+    required String userCodeB64,
+    bool requireBiometrics = false,
+    String? modelId,
+  }) {
+    return instance.saveUserCode(
+      userName: userName,
+      userCodeB64: userCodeB64,
+      requireBiometrics: requireBiometrics,
+      modelId: modelId,
+    );
+  }
+
+  Future<void> clearUserCode(String userName, {String? modelId}) {
+    return instance.clearUserCode(userName, modelId: modelId);
+  }
 }

@@ -38,4 +38,27 @@ class MethodChannelEmotionDetection extends EmotionDetectionPlatform {
   Future<void> macHideCameraPreview() {
     return methodChannel.invokeMethod<void>('hideMacCameraPreview');
   }
+
+  @override
+  Future<void> saveUserCode({
+    required String userName,
+    required String userCodeB64,
+    bool requireBiometrics = false,
+    String? modelId,
+  }) {
+    return methodChannel.invokeMethod<void>('setUserCode', <String, dynamic>{
+      'userName': userName,
+      'userCodeB64': userCodeB64,
+      'requireBiometrics': requireBiometrics,
+      if (modelId != null) 'modelId': modelId,
+    });
+  }
+
+  @override
+  Future<void> clearUserCode(String userName, {String? modelId}) {
+    return methodChannel.invokeMethod<void>('clearUserCode', <String, dynamic>{
+      'userName': userName,
+      if (modelId != null) 'modelId': modelId,
+    });
+  }
 }
