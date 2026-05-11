@@ -365,7 +365,9 @@ Deliverables:
 - Kotlin/Java SDK wrapping JNI/core runtime. Started a JVM-testable
   `EmotionNativeSdk` wrapper with core lifecycle, model registration, image, and
   prediction types before JNI binding.
-- CameraX and ML Kit adapters.
+- CameraX and ML Kit adapters. Added JVM-testable camera frame/source,
+  face-detector, and camera prediction session boundaries before binding to
+  CameraX and ML Kit runtime types.
 - Android Keystore adapter integration. Added a JVM-testable
   `EmotionSecureStore` boundary and `AndroidKeystoreSecureStore` adapter over
   the existing encrypted `SecretStore`.
@@ -379,6 +381,8 @@ Tests/gates:
   validation.
 - Android secure-store JVM tests cover set/get/update/delete, namespace
   isolation, and invalid input failures.
+- Android camera JVM smoke tests cover no-face skip, face-detected prediction,
+  and frame source start/stop behavior.
 - Instrumented JNI/decryption/inference smoke tests.
 - Flutter Android integration smoke test.
 
