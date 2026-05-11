@@ -371,7 +371,8 @@ Deliverables:
 - Android Keystore adapter integration. Added a JVM-testable
   `EmotionSecureStore` boundary and `AndroidKeystoreSecureStore` adapter over
   the existing encrypted `SecretStore`.
-- AAR/Maven packaging.
+- AAR/Maven packaging. Android Gradle publishing metadata now emits a release
+  AAR plus sources jar under artifact `emotion-native-sdk-android`.
 - Flutter Android plugin migrated to Kotlin SDK. Added shared Kotlin payload
   parsers for register, predict, and user-code method-channel arguments and
   wired the plugin handlers through them.
