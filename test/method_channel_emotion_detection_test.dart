@@ -142,4 +142,29 @@ void main() {
       'inputs': <String, dynamic>{'input': 1},
     });
   });
+
+  test('face emotion sends exact platform channel payload', () async {
+    final platform = MethodChannelEmotionDetection();
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(defaultChannel, (call) async {
+      calls.add(call);
+      return <String, dynamic>{'Neutral': 0.8};
+    });
+
+    final result = await platform.faceEmotion(<String, dynamic>{
+      'faceImageData': <int>[1, 2, 3],
+      'width': 48,
+      'height': 48,
+    });
+
+    expect(result, <String, dynamic>{'Neutral': 0.8});
+    expect(calls, hasLength(1));
+    expect(calls.single.method, 'faceEmotion');
+    expect(calls.single.arguments, <String, dynamic>{
+      'faceImageData': <int>[1, 2, 3],
+      'width': 48,
+      'height': 48,
+    });
+  });
 }

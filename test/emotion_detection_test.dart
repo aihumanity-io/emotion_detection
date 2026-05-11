@@ -20,6 +20,7 @@ class _FakeEmotionDetectionPlatform
   String? warmedModelId;
   Map<String, dynamic>? predictionRequest;
   String? unloadedModelId;
+  Map<String, dynamic>? faceEmotionInputs;
 
   @override
   Future<String?> getPlatformVersion() async => '42';
@@ -142,6 +143,12 @@ class _FakeEmotionDetectionPlatform
   @override
   Future<void> unload(String modelId) async {
     unloadedModelId = modelId;
+  }
+
+  @override
+  Future<Map?> faceEmotion(Map<String, dynamic> inputs) async {
+    faceEmotionInputs = inputs;
+    return <String, dynamic>{'Neutral': 0.8};
   }
 }
 
@@ -272,5 +279,21 @@ void main() {
     expect(platform.clearedKeyShardModelId, 'model-e');
     expect(platform.clearedModelLicenseModelId, 'model-e');
     expect(platform.unloadedModelId, 'model-e');
+  });
+
+  test('face emotion inference delegates to platform implementation', () async {
+    final platform = _FakeEmotionDetectionPlatform();
+    EmotionDetectionPlatform.instance = platform;
+
+    final result = await EmotionDetectionPlatform.instance.faceEmotion(
+      <String, dynamic>{
+        'faceImageData': <int>[1, 2, 3]
+      },
+    );
+
+    expect(result, <String, dynamic>{'Neutral': 0.8});
+    expect(platform.faceEmotionInputs, <String, dynamic>{
+      'faceImageData': <int>[1, 2, 3],
+    });
   });
 }

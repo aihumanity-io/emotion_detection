@@ -78,6 +78,11 @@ class _FakeEmotionDetectionPlatform
 
   @override
   Future<void> unload(String modelId) async {}
+
+  @override
+  Future<Map?> faceEmotion(Map<String, dynamic> inputs) async {
+    return <String, dynamic>{'Neutral': 0.8};
+  }
 }
 
 void main() {

@@ -123,4 +123,8 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
   Future<void> unload(String modelId) {
     return instance.unload(modelId);
   }
+
+  Future<Map?> faceEmotion(Map<String, dynamic> inputs) {
+    return instance.faceEmotion(inputs);
+  }
 }

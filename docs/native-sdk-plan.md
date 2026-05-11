@@ -434,6 +434,8 @@ Deliverables:
   instead of direct public API method-channel calls. User-code storage now also
   delegates through the platform interface, and `ModelRuntime` provisioning and
   prediction lifecycle calls are routed through the same platform boundary.
+  Legacy `faceEmotion` inference used by `EmotionDetectorView` now also routes
+  through the platform interface instead of calling method channels directly.
 - Public Dart API preserved where possible.
 - `EmotionDetectorView` uses platform SDKs consistently.
 - Documentation updated for native and Flutter installs.
@@ -443,6 +445,7 @@ Tests/gates:
 - `flutter analyze`.
 - `flutter test`.
 - Method-channel payload tests for the concrete platform wrapper.
+- Face-emotion platform delegation and payload tests.
 - Example app smoke tests on available platforms. Added a widget smoke that
   boots the example through the public plugin API with a fake platform wrapper.
 - API compatibility notes.

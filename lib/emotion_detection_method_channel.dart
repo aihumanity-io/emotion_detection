@@ -158,4 +158,9 @@ class MethodChannelEmotionDetection extends EmotionDetectionPlatform {
       {'modelId': modelId},
     );
   }
+
+  @override
+  Future<Map?> faceEmotion(Map<String, dynamic> inputs) {
+    return methodChannel.invokeMethod<Map>('faceEmotion', inputs);
+  }
 }
