@@ -334,7 +334,8 @@ Deliverables:
 - Swift SDK wrapping the core ABI. Started as a standalone SwiftPM package under
   `apple/EmotionNativeSDK` with lifecycle/status/image/prediction types and a
   test fake for the native core boundary.
-- iOS/macOS camera and Vision face detection adapters.
+- iOS/macOS camera and Vision face detection adapters. Added camera frame/source
+  protocols, `EmotionCameraPredictionSession`, and a `VisionFaceDetector`.
 - Keychain adapter integration. Added a Swift `EmotionSecureStore` boundary and
   `KeychainSecureStore` implementation with injectable Security client.
 - XCFramework/SPM/CocoaPods packaging.
@@ -348,7 +349,8 @@ Tests/gates:
   and invalid input failures.
 - Still-image inference test. SwiftPM fixture loads a P3 PPM image and drives
   the Apple SDK wrapper through fake-core prediction.
-- Camera smoke test.
+- Camera smoke test. SwiftPM fake-frame tests cover no-face skip, face-detected
+  prediction, and frame source start/stop behavior.
 - Flutter iOS/macOS smoke test where available.
 
 ### Phase 4: Android SDK
