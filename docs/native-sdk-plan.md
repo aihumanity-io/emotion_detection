@@ -335,7 +335,8 @@ Deliverables:
   `apple/EmotionNativeSDK` with lifecycle/status/image/prediction types and a
   test fake for the native core boundary.
 - iOS/macOS camera and Vision face detection adapters.
-- Keychain adapter integration.
+- Keychain adapter integration. Added a Swift `EmotionSecureStore` boundary and
+  `KeychainSecureStore` implementation with injectable Security client.
 - XCFramework/SPM/CocoaPods packaging.
 - Flutter Apple plugin migrated to Swift SDK.
 
@@ -343,6 +344,8 @@ Tests/gates:
 
 - XCTest pass. SwiftPM tests cover lifecycle call ordering and failure-state
   handling for the Apple SDK wrapper.
+- Keychain fake-client tests cover set/get/update/delete, namespace isolation,
+  and invalid input failures.
 - Still-image inference test.
 - Camera smoke test.
 - Flutter iOS/macOS smoke test where available.
