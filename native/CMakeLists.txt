@@ -37,6 +37,7 @@ set(EMOTION_NATIVE_CORE_SOURCES
   src/crypto_aes_gcm.cpp
   src/decrypt_pipeline.cpp
   src/file_secure_store.cpp
+  src/windows_secure_store.cpp
   src/crypto_sha256.cpp
   src/key_material.cpp
   src/license_state.cpp
@@ -60,6 +61,9 @@ target_include_directories(emotion_native_core PRIVATE
 target_link_libraries(emotion_native_core PRIVATE
   mbedcrypto
   nlohmann_json::nlohmann_json)
+if(WIN32)
+  target_link_libraries(emotion_native_core PRIVATE Crypt32)
+endif()
 if(EMOTION_ENABLE_ONNX_RUNTIME)
   if(NOT ONNXRUNTIME_ROOT)
     message(FATAL_ERROR "ONNXRUNTIME_ROOT is required when EMOTION_ENABLE_ONNX_RUNTIME=ON")
@@ -95,6 +99,9 @@ if(EMOTION_SDK_BUILD_INSTALLABLE)
   target_link_libraries(emotion_sdk PRIVATE
     mbedcrypto
     nlohmann_json::nlohmann_json)
+  if(WIN32)
+    target_link_libraries(emotion_sdk PRIVATE Crypt32)
+  endif()
   if(EMOTION_ENABLE_ONNX_RUNTIME)
     target_compile_definitions(emotion_sdk PUBLIC EMOTION_ENABLE_ONNX_RUNTIME=1)
     target_include_directories(emotion_sdk PRIVATE
@@ -236,6 +243,17 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_file_secure_store_test COMMAND emotion_file_secure_store_test)
+
+  add_executable(emotion_windows_secure_store_test
+    tests/windows_secure_store_test.cpp)
+  target_link_libraries(emotion_windows_secure_store_test PRIVATE emotion_native_core)
+  target_compile_definitions(emotion_windows_secure_store_test PRIVATE
+    EMOTION_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/windows_secure_store_test")
+  set_target_properties(emotion_windows_secure_store_test PROPERTIES
+    CXX_STANDARD 11
+    CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO)
+  add_test(NAME emotion_windows_secure_store_test COMMAND emotion_windows_secure_store_test)
 
   add_executable(emotion_logging_test
     tests/logging_test.cpp)

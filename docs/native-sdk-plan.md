@@ -398,7 +398,9 @@ Deliverables:
 - C/C++ SDK package. Started with an installable CMake package target,
   exported `EmotionNativeSDK::emotion_sdk`, installed public headers, and a
   package-consumer smoke test.
-- Windows secure-store adapter.
+- Windows secure-store adapter. Started with a DPAPI-backed
+  `WindowsSecureStore` adapter that persists user-scoped protected blobs
+  without requiring Windows Hello or biometrics.
 - Linux secure-store adapter and documented dev fallback. Started with an
   explicit file-backed `FileSecureStore` adapter for development and test
   environments where libsecret/keyring is not available.
