@@ -1,4 +1,3 @@
-import 'package:flutter/services.dart';
 import 'emotion_detection_platform_interface.dart';
 import 'utility/emotion_provisioner.dart';
 export 'emotion_detector_view.dart';
@@ -44,26 +43,16 @@ class EmotionDetection {
     );
   }
 
-  // macOS camera prediction stream
-  // Usage: EmotionDetection().macCameraStream(modelId: 'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx')
-  static const _cameraStream = EventChannel('face_emotion_detection/camera');
-  static const _runtimeCh = MethodChannel('face_emotion_detection');
-
   Stream<Map<String, double>> macCameraStream({String? modelId}) {
-    final args = <String, dynamic>{};
-    if (modelId != null) args['modelId'] = modelId;
-    return _cameraStream
-        .receiveBroadcastStream(args)
-        .map((event) => Map<String, double>.from(event as Map));
+    return EmotionDetectionPlatform.instance.macCameraStream(modelId: modelId);
   }
 
   Future<void> macShowCameraPreview({String? modelId}) {
-    return _runtimeCh.invokeMethod('showMacCameraPreview', {
-      if (modelId != null) 'modelId': modelId,
-    });
+    return EmotionDetectionPlatform.instance
+        .macShowCameraPreview(modelId: modelId);
   }
 
   Future<void> macHideCameraPreview() {
-    return _runtimeCh.invokeMethod('hideMacCameraPreview');
+    return EmotionDetectionPlatform.instance.macHideCameraPreview();
   }
 }

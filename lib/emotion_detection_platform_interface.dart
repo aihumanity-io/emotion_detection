@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'emotion_detection_method_channel.dart';
@@ -26,5 +28,17 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
   Future<String?> getPlatformVersion() {
     return instance.getPlatformVersion();
     //throw UnimplementedError('platformVersion() has not been implemented.');
+  }
+
+  Stream<Map<String, double>> macCameraStream({String? modelId}) {
+    return instance.macCameraStream(modelId: modelId);
+  }
+
+  Future<void> macShowCameraPreview({String? modelId}) {
+    return instance.macShowCameraPreview(modelId: modelId);
+  }
+
+  Future<void> macHideCameraPreview() {
+    return instance.macHideCameraPreview();
   }
 }
