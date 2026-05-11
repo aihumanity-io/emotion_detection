@@ -338,7 +338,8 @@ Deliverables:
   protocols, `EmotionCameraPredictionSession`, and a `VisionFaceDetector`.
 - Keychain adapter integration. Added a Swift `EmotionSecureStore` boundary and
   `KeychainSecureStore` implementation with injectable Security client.
-- XCFramework/SPM/CocoaPods packaging.
+- XCFramework/SPM/CocoaPods packaging. SwiftPM package is in place; local
+  CocoaPods metadata added at `apple/EmotionNativeSDK/EmotionNativeSDK.podspec`.
 - Flutter Apple plugin migrated to Swift SDK.
 
 Tests/gates:
