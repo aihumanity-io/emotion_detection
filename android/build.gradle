@@ -24,6 +24,9 @@ allprojects {
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
 
+def flutterRoot = System.getenv("FLUTTER_ROOT")
+def flutterEmbeddingJar = flutterRoot == null ? null : file("$flutterRoot/bin/cache/artifacts/engine/android-x64/flutter.jar")
+
 android {
     namespace = "com.tartalabs.emotiondetection.emotion_detection"
 
@@ -55,8 +58,11 @@ android {
         implementation "com.google.android.gms:play-services-tasks:17.0.0"
         implementation "org.tensorflow:tensorflow-lite-select-tf-ops:2.3.0"
         implementation 'org.tensorflow:tensorflow-lite-task-vision:0.4.0'
+        if (flutterEmbeddingJar != null && flutterEmbeddingJar.exists()) {
+            compileOnly files(flutterEmbeddingJar)
+        }
 
-        testImplementation("org.jetbrains.kotlin:kotlin-test")
+        testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
         testImplementation("org.mockito:mockito-core:5.0.0")
     }
 

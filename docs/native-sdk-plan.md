@@ -362,7 +362,9 @@ Tests/gates:
 
 Deliverables:
 
-- Kotlin/Java SDK wrapping JNI/core runtime.
+- Kotlin/Java SDK wrapping JNI/core runtime. Started a JVM-testable
+  `EmotionNativeSdk` wrapper with core lifecycle, model registration, image, and
+  prediction types before JNI binding.
 - CameraX and ML Kit adapters.
 - Android Keystore adapter integration.
 - AAR/Maven packaging.
@@ -370,7 +372,9 @@ Deliverables:
 
 Tests/gates:
 
-- JVM tests.
+- JVM tests. Added fake-core Kotlin lifecycle tests for call ordering,
+  unregistered prediction failures, failed register rollback, and RGB image
+  validation.
 - Instrumented JNI/decryption/inference smoke tests.
 - Flutter Android integration smoke test.
 
