@@ -75,6 +75,14 @@ set_target_properties(emotion_native_core PROPERTIES
   CXX_STANDARD_REQUIRED YES
   CXX_EXTENSIONS NO)
 
+add_executable(emotion_still_image_sample
+  samples/still_image_predict.cpp)
+target_link_libraries(emotion_still_image_sample PRIVATE emotion_native_core)
+set_target_properties(emotion_still_image_sample PROPERTIES
+  CXX_STANDARD 11
+  CXX_STANDARD_REQUIRED YES
+  CXX_EXTENSIONS NO)
+
 if(EMOTION_SDK_BUILD_TESTS)
   enable_testing()
 
@@ -241,4 +249,11 @@ if(EMOTION_SDK_BUILD_TESTS)
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO)
   add_test(NAME emotion_sdk_c_api_test COMMAND emotion_sdk_c_api_test)
+
+  add_test(NAME emotion_still_image_sample_test
+    COMMAND emotion_still_image_sample
+      "${CMAKE_CURRENT_SOURCE_DIR}/../test/resources/model_manifests/valid_fer2025.json"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/resources/sample_rgb.ppm")
+  set_tests_properties(emotion_still_image_sample_test PROPERTIES
+    PASS_REGULAR_EXPRESSION "top_label_index=4")
 endif()

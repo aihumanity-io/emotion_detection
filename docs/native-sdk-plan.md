@@ -315,13 +315,16 @@ Deliverables:
 - ONNX Runtime adapter. Boundary added with a fail-closed unsupported adapter
   until ONNX Runtime is linked. Optional C API wiring is available with
   `EMOTION_ENABLE_ONNX_RUNTIME=ON` and `ONNXRUNTIME_ROOT`.
-- C/C++ sample for still-image prediction.
+- C/C++ sample for still-image prediction. `native/samples/still_image_predict.cpp`
+  reads a P3 PPM still image and exercises the public C ABI lifecycle.
 
 Tests/gates:
 
 - Golden preprocessing tensor tests.
 - Golden inference output tests.
-- Memory cleanup smoke test.
+- Sample smoke test through CTest.
+- Memory cleanup smoke test. C ABI lifecycle now loops warm/predict/unload/shutdown
+  in `emotion_sdk_c_api_test`.
 - Linux/macOS local CTest pass.
 
 ### Phase 3: Apple SDK

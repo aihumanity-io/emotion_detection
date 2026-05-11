@@ -170,6 +170,34 @@ void failed_manifest_register_does_not_block_retry() {
               "shutdown should succeed");
 }
 
+void repeated_lifecycle_cleanup_smoke() {
+  for (int iteration = 0; iteration < 25; ++iteration) {
+    const emotion_config_t sdk = sdk_config();
+    const emotion_model_config_t model = model_config();
+
+    expect_true(emotion_init(&sdk) == EMOTION_STATUS_OK, "init should succeed");
+    expect_true(emotion_register_model(&model) == EMOTION_STATUS_OK,
+                "register should succeed");
+    expect_true(emotion_warmup("aih_fer2025") == EMOTION_STATUS_OK,
+                "warmup should succeed");
+
+    std::vector<uint8_t> pixels;
+    const emotion_image_t image = rgb_image(&pixels);
+    emotion_class_score_t scores[5] = {};
+    emotion_result_t result = {};
+    result.scores = scores;
+    result.scores_capacity = 5u;
+
+    expect_true(emotion_predict_image("aih_fer2025", &image, nullptr, &result) ==
+                    EMOTION_STATUS_OK,
+                "predict should succeed");
+    expect_true(emotion_unload("aih_fer2025") == EMOTION_STATUS_OK,
+                "unload should succeed");
+    expect_true(emotion_shutdown() == EMOTION_STATUS_OK,
+                "shutdown should succeed");
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -178,5 +206,6 @@ int main() {
   result_buffer_too_small_is_reported();
   provisioning_entrypoints_validate_model();
   failed_manifest_register_does_not_block_retry();
+  repeated_lifecycle_cleanup_smoke();
   return g_failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
