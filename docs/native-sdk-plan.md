@@ -399,7 +399,9 @@ Deliverables:
   exported `EmotionNativeSDK::emotion_sdk`, installed public headers, and a
   package-consumer smoke test.
 - Windows secure-store adapter.
-- Linux secure-store adapter and documented dev fallback.
+- Linux secure-store adapter and documented dev fallback. Started with an
+  explicit file-backed `FileSecureStore` adapter for development and test
+  environments where libsecret/keyring is not available.
 - Raspberry Pi ARM64 build path.
 - CLI and benchmark samples.
 
