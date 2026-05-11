@@ -346,7 +346,8 @@ Tests/gates:
   handling for the Apple SDK wrapper.
 - Keychain fake-client tests cover set/get/update/delete, namespace isolation,
   and invalid input failures.
-- Still-image inference test.
+- Still-image inference test. SwiftPM fixture loads a P3 PPM image and drives
+  the Apple SDK wrapper through fake-core prediction.
 - Camera smoke test.
 - Flutter iOS/macOS smoke test where available.
 

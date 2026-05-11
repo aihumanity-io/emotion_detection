@@ -18,7 +18,8 @@ let package = Package(
         .target(name: "EmotionNativeSDK"),
         .testTarget(
             name: "EmotionNativeSDKTests",
-            dependencies: ["EmotionNativeSDK"]
+            dependencies: ["EmotionNativeSDK"],
+            resources: [.process("Resources")]
         )
     ]
 )
