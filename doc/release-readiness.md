@@ -51,6 +51,19 @@ xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Debug \
   EXPANDED_CODE_SIGN_IDENTITY= build
 ```
 
+## Local iOS Build Smoke
+
+Use a no-codesign iOS debug build for compile/package validation before device
+deployment:
+
+```sh
+cd example
+flutter build ios --debug --no-codesign
+```
+
+The example app must keep a `version` field so iOS builds include
+`CFBundleShortVersionString` and `CFBundleVersion`.
+
 ## Web Gate
 
 Web is not part of the stable SDK release scope while

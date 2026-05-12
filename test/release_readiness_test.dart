@@ -13,7 +13,16 @@ void main() {
     expect(doc, contains('Local macOS Build Smoke'));
     expect(doc, contains('CODE_SIGNING_ALLOWED=NO'));
     expect(doc, contains('AppleDouble'));
+    expect(doc, contains('Local iOS Build Smoke'));
+    expect(doc, contains('flutter build ios --debug --no-codesign'));
     expect(doc, contains('Web | Evaluation only'));
     expect(doc, contains('distribution is no-go'));
+  });
+
+  test('example app declares an iOS build version', () {
+    final pubspec = File('example/pubspec.yaml').readAsStringSync();
+
+    expect(pubspec,
+        contains(RegExp(r'^version: \d+\.\d+\.\d+\+\d+$', multiLine: true)));
   });
 }
