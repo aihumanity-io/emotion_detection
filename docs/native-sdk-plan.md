@@ -448,6 +448,8 @@ Tests/gates:
 - Face-emotion platform delegation and payload tests.
 - Platform interface default-method tests cover clear unsupported-platform
   failures instead of recursive delegation.
+- Public wrapper tests cover the same unsupported-platform failures through
+  `EmotionDetection`, `UserCodeChannel`, and `ModelRuntime`.
 - Example app smoke tests on available platforms. Added a widget smoke that
   boots the example through the public plugin API with a fake platform wrapper.
 - API compatibility notes.

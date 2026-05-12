@@ -340,4 +340,45 @@ void main() {
       expect(call, throwsA(isA<UnimplementedError>()));
     }
   });
+
+  test('public wrappers fail clearly on unimplemented platform methods',
+      () async {
+    EmotionDetectionPlatform.instance =
+        _UnimplementedEmotionDetectionPlatform();
+
+    final emotionDetection = EmotionDetection();
+    final calls = <Object? Function()>[
+      emotionDetection.getPlatformVersion,
+      emotionDetection.macCameraStream,
+      () => emotionDetection.macShowCameraPreview(),
+      emotionDetection.macHideCameraPreview,
+      () => UserCodeChannel.saveUserCode(
+            userName: 'david',
+            userCodeB64: 'code',
+          ),
+      () => UserCodeChannel.clearUserCode('david'),
+      () => ModelRuntime('custom_channel'),
+      () => ModelRuntime.registerModel(
+            modelId: 'model-a',
+            resourceBase: 'face_v1',
+          ),
+      () => ModelRuntime.setKeyShard(
+            modelId: 'model-a',
+            keyShardB64: 'shard',
+          ),
+      () => ModelRuntime.clearKeyShard('model-a'),
+      () => ModelRuntime.setModelLicense(
+            modelId: 'model-a',
+            license: <String, dynamic>{'ok': true},
+          ),
+      () => ModelRuntime.clearModelLicense('model-a'),
+      () => ModelRuntime.warmUp('model-a'),
+      () => ModelRuntime.predict('model-a', <String, dynamic>{}),
+      () => ModelRuntime.unload('model-a'),
+    ];
+
+    for (final call in calls) {
+      expect(call, throwsA(isA<UnimplementedError>()));
+    }
+  });
 }
