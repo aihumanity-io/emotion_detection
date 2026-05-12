@@ -26,20 +26,23 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
   }
 
   Future<String?> getPlatformVersion() {
-    return instance.getPlatformVersion();
-    //throw UnimplementedError('platformVersion() has not been implemented.');
+    throw UnimplementedError('getPlatformVersion() has not been implemented.');
   }
 
   Stream<Map<String, double>> macCameraStream({String? modelId}) {
-    return instance.macCameraStream(modelId: modelId);
+    throw UnimplementedError('macCameraStream() has not been implemented.');
   }
 
   Future<void> macShowCameraPreview({String? modelId}) {
-    return instance.macShowCameraPreview(modelId: modelId);
+    throw UnimplementedError(
+      'macShowCameraPreview() has not been implemented.',
+    );
   }
 
   Future<void> macHideCameraPreview() {
-    return instance.macHideCameraPreview();
+    throw UnimplementedError(
+      'macHideCameraPreview() has not been implemented.',
+    );
   }
 
   Future<void> saveUserCode({
@@ -48,20 +51,21 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
     bool requireBiometrics = false,
     String? modelId,
   }) {
-    return instance.saveUserCode(
-      userName: userName,
-      userCodeB64: userCodeB64,
-      requireBiometrics: requireBiometrics,
-      modelId: modelId,
+    throw UnimplementedError(
+      'saveUserCode() has not been implemented.',
     );
   }
 
   Future<void> clearUserCode(String userName, {String? modelId}) {
-    return instance.clearUserCode(userName, modelId: modelId);
+    throw UnimplementedError(
+      'clearUserCode() has not been implemented.',
+    );
   }
 
   void configureModelRuntimeChannel(String methodChannelName) {
-    return instance.configureModelRuntimeChannel(methodChannelName);
+    throw UnimplementedError(
+      'configureModelRuntimeChannel() has not been implemented.',
+    );
   }
 
   Future<void> registerModel({
@@ -71,12 +75,8 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
     String hkdfInfo = 'model_runtime',
     String? masterKeyB64,
   }) {
-    return instance.registerModel(
-      modelId: modelId,
-      resourceBase: resourceBase,
-      encExt: encExt,
-      hkdfInfo: hkdfInfo,
-      masterKeyB64: masterKeyB64,
+    throw UnimplementedError(
+      'registerModel() has not been implemented.',
     );
   }
 
@@ -86,42 +86,45 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
     int? expiresAtMs,
     String? userName,
   }) {
-    return instance.setKeyShard(
-      modelId: modelId,
-      keyShardB64: keyShardB64,
-      expiresAtMs: expiresAtMs,
-      userName: userName,
+    throw UnimplementedError(
+      'setKeyShard() has not been implemented.',
     );
   }
 
   Future<void> clearKeyShard(String modelId) {
-    return instance.clearKeyShard(modelId);
+    throw UnimplementedError(
+      'clearKeyShard() has not been implemented.',
+    );
   }
 
   Future<void> setModelLicense({
     required String modelId,
     required Map<String, dynamic> license,
   }) {
-    return instance.setModelLicense(modelId: modelId, license: license);
+    throw UnimplementedError(
+      'setModelLicense() has not been implemented.',
+    );
   }
 
   Future<void> clearModelLicense(String modelId) {
-    return instance.clearModelLicense(modelId);
+    throw UnimplementedError(
+      'clearModelLicense() has not been implemented.',
+    );
   }
 
   Future<bool> warmUp(String modelId) {
-    return instance.warmUp(modelId);
+    throw UnimplementedError('warmUp() has not been implemented.');
   }
 
   Future<Map<String, dynamic>> predict(
     String modelId,
     Map<String, dynamic> inputs,
   ) {
-    return instance.predict(modelId, inputs);
+    throw UnimplementedError('predict() has not been implemented.');
   }
 
   Future<void> unload(String modelId) {
-    return instance.unload(modelId);
+    throw UnimplementedError('unload() has not been implemented.');
   }
 
   Future<Map?> faceEmotion(Map<String, dynamic> inputs) {

@@ -446,6 +446,8 @@ Tests/gates:
 - `flutter test`.
 - Method-channel payload tests for the concrete platform wrapper.
 - Face-emotion platform delegation and payload tests.
+- Platform interface default-method tests cover clear unsupported-platform
+  failures instead of recursive delegation.
 - Example app smoke tests on available platforms. Added a widget smoke that
   boots the example through the public plugin API with a fake platform wrapper.
 - API compatibility notes.

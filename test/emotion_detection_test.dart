@@ -152,7 +152,7 @@ class _FakeEmotionDetectionPlatform
   }
 }
 
-class _UnimplementedFaceEmotionPlatform extends EmotionDetectionPlatform {}
+class _UnimplementedEmotionDetectionPlatform extends EmotionDetectionPlatform {}
 
 void main() {
   test('getPlatformVersion delegates to platform implementation', () async {
@@ -299,13 +299,45 @@ void main() {
     });
   });
 
-  test('face emotion fails clearly when a platform has not implemented it',
+  test('platform methods fail clearly when a platform has not implemented them',
       () async {
-    EmotionDetectionPlatform.instance = _UnimplementedFaceEmotionPlatform();
+    EmotionDetectionPlatform.instance =
+        _UnimplementedEmotionDetectionPlatform();
+    final platform = EmotionDetectionPlatform.instance;
 
-    expect(
-      () => EmotionDetectionPlatform.instance.faceEmotion(<String, dynamic>{}),
-      throwsA(isA<UnimplementedError>()),
-    );
+    final calls = <Object? Function()>[
+      platform.getPlatformVersion,
+      platform.macCameraStream,
+      () => platform.macShowCameraPreview(),
+      platform.macHideCameraPreview,
+      () => platform.saveUserCode(
+            userName: 'david',
+            userCodeB64: 'code',
+          ),
+      () => platform.clearUserCode('david'),
+      () => platform.configureModelRuntimeChannel('custom_channel'),
+      () => platform.registerModel(
+            modelId: 'model-a',
+            resourceBase: 'face_v1',
+          ),
+      () => platform.setKeyShard(
+            modelId: 'model-a',
+            keyShardB64: 'shard',
+          ),
+      () => platform.clearKeyShard('model-a'),
+      () => platform.setModelLicense(
+            modelId: 'model-a',
+            license: <String, dynamic>{'ok': true},
+          ),
+      () => platform.clearModelLicense('model-a'),
+      () => platform.warmUp('model-a'),
+      () => platform.predict('model-a', <String, dynamic>{}),
+      () => platform.unload('model-a'),
+      () => platform.faceEmotion(<String, dynamic>{}),
+    ];
+
+    for (final call in calls) {
+      expect(call, throwsA(isA<UnimplementedError>()));
+    }
   });
 }
