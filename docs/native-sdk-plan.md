@@ -460,7 +460,10 @@ Tests/gates:
 
 Deliverables:
 
-- Security decision record for Web model exposure.
+- Security decision record for Web model exposure. Started in
+  `docs/web-model-protection-decision.md` with a no-go default for production
+  browser model distribution until extraction risk is explicitly accepted or a
+  hosted-inference path is chosen.
 - TFLite/Web prototype.
 - Browser camera sample.
 - npm package only if tradeoffs are accepted.
@@ -470,7 +473,9 @@ Tests/gates:
 - Accuracy comparison against native ONNX baseline.
 - Bundle size and load-time report.
 - Browser smoke tests.
-- Explicit go/no-go on client-side model distribution risk.
+- Explicit go/no-go on client-side model distribution risk. Added a doc-backed
+  regression test that keeps the production Web gates and required evidence
+  visible.
 
 ## Open Decisions
 
