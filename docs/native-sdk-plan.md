@@ -468,7 +468,9 @@ Deliverables:
 - Browser camera sample.
 - Hosted inference fallback contract. Started in
   `docs/web-hosted-inference-contract.md` with browser-safe request/response
-  shapes and forbidden secret/model-material fields.
+  shapes and forbidden secret/model-material fields. Added
+  `WebHostedInferenceClient` as a testable Dart stub for request construction,
+  response validation, structured errors, and round-trip timing.
 - npm package only if tradeoffs are accepted.
 
 Tests/gates:

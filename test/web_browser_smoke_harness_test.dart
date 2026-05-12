@@ -11,6 +11,8 @@ void main() {
     expect(doc, contains('camera permission'));
     expect(doc, contains('first video frame'));
     expect(doc, contains('label-to-score map'));
+    expect(doc, contains('WebHostedInferenceClient'));
+    expect(doc, contains('structured errors'));
     expect(doc, contains('camera permission-to-first-frame time'));
     expect(doc, contains('inference call latency'));
     expect(doc, contains('assetAuditPassed'));

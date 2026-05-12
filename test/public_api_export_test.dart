@@ -20,6 +20,10 @@ void main() {
     expect(CekSecretClient, isA<Type>());
     expect(CekSecretUtils, isA<Type>());
     expect(ModelSecret, isA<Type>());
+    expect(WebHostedInferenceClient, isA<Type>());
+    expect(WebHostedInferenceRequest, isA<Type>());
+    expect(WebHostedInferenceResult, isA<Type>());
+    expect(WebHostedInferenceException, isA<Type>());
     expect(defaultEmotionModelKey, isNotEmpty);
     expect(defaultEmotionModelKeys, isNotEmpty);
     expect(defaultAndroidEmotionModelKeys, isNotEmpty);

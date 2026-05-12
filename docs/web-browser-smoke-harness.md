@@ -33,6 +33,10 @@ models while `docs/web-model-protection-decision.md` remains no-go.
 7. Record camera permission-to-first-frame time.
 8. Record inference call latency or hosted round-trip latency.
 
+Use `WebHostedInferenceClient` for the inference-stub call so request metadata,
+forbidden-field handling, score validation, structured errors, and round-trip
+timing match the hosted inference contract.
+
 ## Expected Stub Response
 
 ```json

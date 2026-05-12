@@ -90,3 +90,8 @@ Clients should log these fields for browser smoke reports:
 Hosted inference fallback work is acceptable only when the client sends no
 model material or secrets, validates response score shape, and records round
 trip latency for the browser smoke report.
+
+Implementation note: `WebHostedInferenceClient` in
+`lib/utility/web_hosted_inference_client.dart` builds this request shape,
+validates response scores, surfaces structured errors, and records round-trip
+latency with an injectable `http.Client`.

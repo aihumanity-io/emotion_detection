@@ -6,6 +6,7 @@ export 'native/model_runtime.dart';
 export 'utility/sdk_secret_client.dart';
 export 'utility/cek_secret_utils.dart';
 export 'utility/emotion_provisioner.dart';
+export 'utility/web_hosted_inference_client.dart';
 
 class EmotionDetection {
   Future<String?> getPlatformVersion() {
