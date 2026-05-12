@@ -450,6 +450,8 @@ Tests/gates:
   failures instead of recursive delegation.
 - Public wrapper tests cover the same unsupported-platform failures through
   `EmotionDetection`, `UserCodeChannel`, and `ModelRuntime`.
+- Public API export tests cover the `emotion_detection.dart` barrel during the
+  native SDK migration, and API docs now note the compatibility surface.
 - Example app smoke tests on available platforms. Added a widget smoke that
   boots the example through the public plugin API with a fake platform wrapper.
 - API compatibility notes.

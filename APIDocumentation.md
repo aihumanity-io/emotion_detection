@@ -108,11 +108,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = EmotionDetectorViewController();
+
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(title: const Text('Emotion Detection')),
         body: Center(
           child: EmotionDetectorView(
+            controller: controller,
             onEmotion: (dist) => debugPrint('Emotion dist: $dist'),
             onFaceImage: (faces) {
               if (faces == null || faces.isEmpty) return const SizedBox();
@@ -132,6 +135,23 @@ class MyApp extends StatelessWidget {
 
 ## Public API
 
+### Native SDK migration compatibility
+
+The Flutter package remains the public entrypoint during the native SDK
+migration. Importing `package:emotion_detection/emotion_detection.dart` still
+exports:
+
+* `EmotionDetectorView` and `EmotionDetectorViewController`
+* `EmotionDetection`
+* `UserCodeChannel`
+* `ModelRuntime`
+* `CekSecretClient` and `CekSecretUtils`
+* provisioning result and exception types
+
+Platform calls now route through `EmotionDetectionPlatform`, so incomplete
+platform implementations fail with `UnimplementedError` instead of hanging or
+recursing.
+
 ### `EmotionDetectorView`
 
 A stateful widget that:
@@ -146,10 +166,20 @@ A stateful widget that:
 ```dart
 EmotionDetectorView({
   Key? key,
+  required EmotionDetectorViewController controller,
   OnFaceImage? onFaceImage,
   OnEmotion? onEmotion,
   OnImage? onImage,
 })
+```
+
+`EmotionDetectorViewController` exposes snapshot and picture-capture controls
+without changing the widget callback surface:
+
+```dart
+final controller = EmotionDetectorViewController();
+controller.takeSnapShot();
+final path = await controller.takePicture();
 ```
 
 #### Typedefs

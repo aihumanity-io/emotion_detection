@@ -119,11 +119,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = EmotionDetectorViewController();
+
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(title: const Text('Emotion Detection Demo')),
         body: Center(
           child: EmotionDetectorView(
+            controller: controller,
             onEmotion: (dist) {
               // dist = {'happy': 0.62, 'neutral': 0.31, 'sad': 0.04, ...}
               debugPrint('Emotion distribution: $dist');
@@ -205,10 +208,14 @@ UI knows which keychain account to use when saving the user code.
 class EmotionDetectorView extends StatefulWidget {
   EmotionDetectorView({
     Key? key,
+    required this.controller,
     this.onFaceImage,
     this.onEmotion,
     this.onImage,
   }) : super(key: key);
+
+  /// Controls snapshot and picture-capture requests.
+  final EmotionDetectorViewController controller;
 
   /// Called with a list of cropped face images (if faces are found).
   /// Return a Flutter [Image] to render if you want, or ignore.
