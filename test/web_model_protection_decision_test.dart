@@ -18,20 +18,45 @@ void main() {
   });
 
   test('web sample does not bundle production model assets', () {
-    final webDir = Directory('example/web');
-    final files = webDir
-        .listSync(recursive: true)
-        .whereType<File>()
-        .map((file) => file.path)
-        .where(
-            (path) => !path.split(Platform.pathSeparator).last.startsWith('._'))
-        .toList()
-      ..sort();
+    final files = _webSampleFiles();
 
     final bundledModels = files.where(_isModelAsset).toList();
 
     expect(bundledModels, isEmpty);
   });
+
+  test('web sample source shell stays within baseline budget', () {
+    final doc = File('docs/web-performance-baseline.md').readAsStringSync();
+    final budget = _readBudget(doc);
+    final sourceShellBytes = _webSampleFiles()
+        .map((path) => File(path).lengthSync())
+        .fold<int>(0, (total, bytes) => total + bytes);
+
+    expect(doc, contains('Current source-shell bytes:'));
+    expect(doc, contains('flutter build web --release'));
+    expect(doc, contains('Camera permission-to-first-frame time'));
+    expect(sourceShellBytes, lessThanOrEqualTo(budget));
+  });
+}
+
+List<String> _webSampleFiles() {
+  final webDir = Directory('example/web');
+  return webDir
+      .listSync(recursive: true)
+      .whereType<File>()
+      .map((file) => file.path)
+      .where(
+          (path) => !path.split(Platform.pathSeparator).last.startsWith('._'))
+      .toList()
+    ..sort();
+}
+
+int _readBudget(String doc) {
+  final match = RegExp(r'Source shell budget: (\d+) bytes\.').firstMatch(doc);
+  if (match == null) {
+    throw StateError('Missing source shell budget in web baseline doc.');
+  }
+  return int.parse(match.group(1)!);
 }
 
 bool _isModelAsset(String path) {

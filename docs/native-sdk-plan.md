@@ -471,7 +471,10 @@ Deliverables:
 Tests/gates:
 
 - Accuracy comparison against native ONNX baseline.
-- Bundle size and load-time report.
+- Bundle size and load-time report. Started in
+  `docs/web-performance-baseline.md` with a checked-in Web source shell budget
+  and prototype reporting requirements before generated release bundle reports
+  are available.
 - Browser smoke tests.
 - Explicit go/no-go on client-side model distribution risk. Added a doc-backed
   regression test that keeps the production Web gates and required evidence

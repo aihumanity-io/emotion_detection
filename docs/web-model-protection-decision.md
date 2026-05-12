@@ -51,3 +51,6 @@ Before changing this to go, document one of these choices:
 Current automated guard: `test/web_model_protection_decision_test.dart` scans
 `example/web` and fails if model binaries or encrypted model payloads are added
 to the Web sample while this decision remains no-go.
+
+The same test also enforces the source Web shell budget documented in
+`docs/web-performance-baseline.md` before larger prototype assets are added.
