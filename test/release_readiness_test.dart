@@ -17,6 +17,7 @@ void main() {
     expect(doc, contains('flutter build ios --debug --no-codesign'));
     expect(doc, contains('Local Android Build Smoke'));
     expect(doc, contains('flutter build apk --debug'));
+    expect(doc, contains('./gradlew :emotion_detection:testDebugUnitTest'));
     expect(doc, contains('Web | Evaluation only'));
     expect(doc, contains('distribution is no-go'));
   });

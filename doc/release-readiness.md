@@ -73,6 +73,13 @@ cd example
 flutter build apk --debug
 ```
 
+Run the plugin Android unit tests through the example Gradle build:
+
+```sh
+cd example/android
+./gradlew :emotion_detection:testDebugUnitTest
+```
+
 On external volumes, Gradle resource packaging, class bundling, dexing, and
 asset merge steps can create AppleDouble `._*` sidecar files. The example
 Android Gradle build strips those files across Android subprojects before the
