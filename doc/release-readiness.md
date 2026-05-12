@@ -36,6 +36,21 @@ validation and platform smoke gates pass.
 - `CHANGELOG.md` and `pubspec.yaml` version aligned.
 - Tag only after the release candidate commit is pushed and CI is green.
 
+## Local macOS Build Smoke
+
+This workspace may live on an external volume that creates AppleDouble `._*`
+sidecar files during CocoaPods and Flutter framework copies. The example iOS
+and macOS Podfiles strip those generated files before signing. For a local
+macOS debug compile on this workspace, use Xcode with signing disabled so build
+products stay under DerivedData:
+
+```sh
+cd example/macos
+xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Debug \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+  EXPANDED_CODE_SIGN_IDENTITY= build
+```
+
 ## Web Gate
 
 Web is not part of the stable SDK release scope while

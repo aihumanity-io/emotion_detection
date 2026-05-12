@@ -241,6 +241,7 @@
 				3399D490228B24CF009A79C7 /* ShellScript */,
 				4413D084424ADF1BD8D15B41 /* [CP] Copy Pods Resources */,
 				2C03426F5F232DAB9BD93247 /* [CP] Embed Pods Frameworks */,
+				FDCD0A0B0C0D0E0F00000001 /* Strip App AppleDouble files */,
 			);
 			buildRules = (
 			);
@@ -400,7 +401,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "echo \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed\n";
+			shellScript = "export COPYFILE_DISABLE=1\nexport COPY_EXTENDED_ATTRIBUTES_DISABLE=1\necho \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename\nCODE_SIGNING_REQUIRED=NO \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed\nif command -v dot_clean >/dev/null 2>&1; then\n  [ -d \"$BUILT_PRODUCTS_DIR\" ] && dot_clean -m \"$BUILT_PRODUCTS_DIR\"\n  [ -d \"$TARGET_BUILD_DIR\" ] && dot_clean -m \"$TARGET_BUILD_DIR\"\nfi\n[ -d \"$TARGET_BUILD_DIR\" ] && /usr/bin/find \"$TARGET_BUILD_DIR\" -name '._*' -exec /bin/rm -f {} +\nif [ -n \"$EXPANDED_CODE_SIGN_IDENTITY\" ] && [ \"$EXPANDED_CODE_SIGN_IDENTITY\" != \"\" ]; then\n  for framework in \"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH\"/*.framework; do\n    [ -d \"$framework\" ] || continue\n    binary=\"$framework/$(basename \"$framework\" .framework)\"\n    [ -f \"$binary\" ] && /usr/bin/codesign --force --verbose --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" -- \"$binary\"\n  done\nfi\n";
 		};
 		33CC111E2044C6BF0003C045 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -420,7 +421,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh && touch Flutter/ephemeral/tripwire";
+			shellScript = "export COPYFILE_DISABLE=1\nexport COPY_EXTENDED_ATTRIBUTES_DISABLE=1\n\"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh && touch Flutter/ephemeral/tripwire";
 		};
 		4413D084424ADF1BD8D15B41 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -438,6 +439,25 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources.sh\"\n";
 			showEnvVarsInLog = 0;
+		};
+		FDCD0A0B0C0D0E0F00000001 /* Strip App AppleDouble files */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Strip App AppleDouble files";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "export COPYFILE_DISABLE=1\nexport COPY_EXTENDED_ATTRIBUTES_DISABLE=1\nif command -v dot_clean >/dev/null 2>&1; then\n  [ -d \"$TARGET_BUILD_DIR/$WRAPPER_NAME\" ] && dot_clean -m \"$TARGET_BUILD_DIR/$WRAPPER_NAME\"\nfi\n[ -d \"$TARGET_BUILD_DIR/$WRAPPER_NAME\" ] && /usr/bin/find \"$TARGET_BUILD_DIR/$WRAPPER_NAME\" -name '._*' -exec /bin/rm -f {} +\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -591,6 +611,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;

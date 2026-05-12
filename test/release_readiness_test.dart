@@ -10,6 +10,9 @@ void main() {
     expect(doc, contains('native alpha / release candidate'));
     expect(doc, contains('flutter pub publish --dry-run'));
     expect(doc, contains('Example app smoke on every advertised platform.'));
+    expect(doc, contains('Local macOS Build Smoke'));
+    expect(doc, contains('CODE_SIGNING_ALLOWED=NO'));
+    expect(doc, contains('AppleDouble'));
     expect(doc, contains('Web | Evaluation only'));
     expect(doc, contains('distribution is no-go'));
   });

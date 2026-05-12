@@ -37,8 +37,27 @@ target 'Runner' do
   end
 end
 
+def add_appledouble_cleanup_phase(target)
+  return unless ['onnxruntime-c', 'onnxruntime-objc', 'ZIPFoundation'].include?(target.name)
+
+  phase_name = 'Strip AppleDouble files'
+  phase = target.shell_script_build_phases.find { |build_phase| build_phase.name == phase_name }
+  phase ||= target.new_shell_script_build_phase(phase_name)
+  phase.shell_script = <<-'SCRIPT'
+export COPYFILE_DISABLE=1
+export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
+if command -v dot_clean >/dev/null 2>&1; then
+  for path in "${PODS_ROOT}" "${TARGET_BUILD_DIR}" "${BUILT_PRODUCTS_DIR}"; do
+    [ -d "$path" ] && dot_clean -m "$path"
+    [ -d "$path" ] && /usr/bin/find "$path" -name '._*' -exec /bin/rm -f {} +
+  done
+fi
+SCRIPT
+end
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    add_appledouble_cleanup_phase(target)
   end
 end
