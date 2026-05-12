@@ -47,3 +47,7 @@ Before changing this to go, document one of these choices:
 - Bundle size and load-time report.
 - Explicit asset audit proving production encrypted models are not bundled in
   the Web sample unless the decision status changes to go.
+
+Current automated guard: `test/web_model_protection_decision_test.dart` scans
+`example/web` and fails if model binaries or encrypted model payloads are added
+to the Web sample while this decision remains no-go.

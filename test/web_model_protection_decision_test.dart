@@ -16,4 +16,32 @@ void main() {
     expect(doc, contains('Bundle size and load-time report'));
     expect(doc, contains('production encrypted models are not bundled'));
   });
+
+  test('web sample does not bundle production model assets', () {
+    final webDir = Directory('example/web');
+    final files = webDir
+        .listSync(recursive: true)
+        .whereType<File>()
+        .map((file) => file.path)
+        .where(
+            (path) => !path.split(Platform.pathSeparator).last.startsWith('._'))
+        .toList()
+      ..sort();
+
+    final bundledModels = files.where(_isModelAsset).toList();
+
+    expect(bundledModels, isEmpty);
+  });
+}
+
+bool _isModelAsset(String path) {
+  final lower = path.toLowerCase();
+  return lower.endsWith('.enc') ||
+      lower.endsWith('.onnx') ||
+      lower.endsWith('.tflite') ||
+      lower.endsWith('.pt') ||
+      lower.endsWith('.pth') ||
+      lower.endsWith('.mlmodel') ||
+      lower.endsWith('.mlmodelc') ||
+      lower.endsWith('.wasm');
 }

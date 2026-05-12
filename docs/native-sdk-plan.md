@@ -475,7 +475,9 @@ Tests/gates:
 - Browser smoke tests.
 - Explicit go/no-go on client-side model distribution risk. Added a doc-backed
   regression test that keeps the production Web gates and required evidence
-  visible.
+  visible. Added an asset audit test that fails if model binaries or encrypted
+  model payloads are bundled into `example/web` while the decision remains
+  no-go.
 
 ## Open Decisions
 
