@@ -42,6 +42,7 @@ models while `docs/web-model-protection-decision.md` remains no-go.
 
 Scores must be numeric and labels must be non-empty strings. The smoke does not
 validate model accuracy; native-vs-Web accuracy belongs in a separate baseline.
+See `docs/web-accuracy-baseline.md` for the native ONNX comparison contract.
 
 ## Debug Output
 
