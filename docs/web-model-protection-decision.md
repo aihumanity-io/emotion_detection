@@ -58,3 +58,7 @@ The same test also enforces the source Web shell budget documented in
 Browser smoke work is scoped in `docs/web-browser-smoke-harness.md`; it uses
 camera/frame plumbing plus a hosted inference stub until the model exposure
 decision changes.
+
+Hosted inference fallback payloads are scoped in
+`docs/web-hosted-inference-contract.md`; browser clients must not send SDK
+secrets, key material, or production model bytes.

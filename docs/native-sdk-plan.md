@@ -466,6 +466,9 @@ Deliverables:
   hosted-inference path is chosen.
 - TFLite/Web prototype.
 - Browser camera sample.
+- Hosted inference fallback contract. Started in
+  `docs/web-hosted-inference-contract.md` with browser-safe request/response
+  shapes and forbidden secret/model-material fields.
 - npm package only if tradeoffs are accepted.
 
 Tests/gates:

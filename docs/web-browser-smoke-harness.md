@@ -19,6 +19,8 @@ models while `docs/web-model-protection-decision.md` remains no-go.
 - Keep production `.enc`, `.onnx`, `.tflite`, `.wasm`, and Core ML assets out
   of `example/web`.
 - Enable browser camera permissions for the test origin.
+- Follow `docs/web-hosted-inference-contract.md` for request, response, and
+  forbidden-field rules.
 
 ## Smoke Steps
 
