@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('web browser smoke harness documents required browser gates', () {
-    final doc = File('docs/web-browser-smoke-harness.md').readAsStringSync();
+    final doc = File('doc/web-browser-smoke-harness.md').readAsStringSync();
 
     expect(doc, contains('`localhost` or HTTPS'));
     expect(doc, contains('hosted inference stub'));
@@ -25,7 +25,7 @@ void main() {
   });
 
   test('web browser smoke harness keeps production model assets forbidden', () {
-    final doc = File('docs/web-browser-smoke-harness.md').readAsStringSync();
+    final doc = File('doc/web-browser-smoke-harness.md').readAsStringSync();
 
     for (final extension in const [
       '.enc',

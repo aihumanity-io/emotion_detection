@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('web model protection decision keeps production web gated', () {
     final doc =
-        File('docs/web-model-protection-decision.md').readAsStringSync();
+        File('doc/web-model-protection-decision.md').readAsStringSync();
 
     expect(doc, contains('Status: no-go'));
     expect(doc, contains('client-side production model distribution'));
@@ -26,7 +26,7 @@ void main() {
   });
 
   test('web sample source shell stays within baseline budget', () {
-    final doc = File('docs/web-performance-baseline.md').readAsStringSync();
+    final doc = File('doc/web-performance-baseline.md').readAsStringSync();
     final budget = _readBudget(doc);
     final sourceShellBytes = _webSampleFiles()
         .map((path) => File(path).lengthSync())

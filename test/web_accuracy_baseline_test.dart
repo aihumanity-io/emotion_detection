@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('web accuracy baseline documents native comparison contract', () {
-    final doc = File('docs/web-accuracy-baseline.md').readAsStringSync();
+    final doc = File('doc/web-accuracy-baseline.md').readAsStringSync();
 
     expect(doc, contains('native/tests/resources/sample_rgb.ppm'));
     expect(doc, contains('ONNX runtime output from the shared native SDK'));
@@ -18,7 +18,7 @@ void main() {
   });
 
   test('web accuracy baseline includes the full emotion label set', () {
-    final doc = File('docs/web-accuracy-baseline.md').readAsStringSync();
+    final doc = File('doc/web-accuracy-baseline.md').readAsStringSync();
 
     for (final label in const [
       'Anger',

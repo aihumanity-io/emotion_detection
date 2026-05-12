@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('web hosted inference contract defines request and response shape', () {
     final doc =
-        File('docs/web-hosted-inference-contract.md').readAsStringSync();
+        File('doc/web-hosted-inference-contract.md').readAsStringSync();
 
     for (final requiredText in const [
       'POST',
@@ -30,7 +30,7 @@ void main() {
 
   test('web hosted inference contract forbids secrets and model material', () {
     final doc =
-        File('docs/web-hosted-inference-contract.md').readAsStringSync();
+        File('doc/web-hosted-inference-contract.md').readAsStringSync();
 
     for (final forbiddenText in const [
       'SDK secret',
@@ -49,7 +49,7 @@ void main() {
 
   test('web hosted inference contract pins score validation rules', () {
     final doc =
-        File('docs/web-hosted-inference-contract.md').readAsStringSync();
+        File('doc/web-hosted-inference-contract.md').readAsStringSync();
 
     expect(doc, contains('finite numbers between `0.0` and `1.0`'));
     expect(doc, contains('within `0.01` of `1.0`'));
