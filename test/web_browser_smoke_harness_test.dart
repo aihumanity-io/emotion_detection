@@ -15,6 +15,8 @@ void main() {
     expect(doc, contains('structured errors'));
     expect(doc, contains('camera permission-to-first-frame time'));
     expect(doc, contains('inference call latency'));
+    expect(doc, contains('WebSmokeReport'));
+    expect(doc, contains('`passed`'));
     expect(doc, contains('assetAuditPassed'));
     expect(
       doc,

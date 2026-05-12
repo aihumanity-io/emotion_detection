@@ -63,6 +63,10 @@ Capture these fields in the smoke report:
 - `responseLabels`
 - `assetAuditPassed`
 
+Use `WebSmokeReport` for the JSON artifact shape. The report should serialize
+the fields above plus `passed`, which is true only when the asset audit passes
+and the hosted inference response includes at least one label.
+
 ## Gate
 
 The Web smoke is passing only when first paint, camera permission, first-frame

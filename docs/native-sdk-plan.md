@@ -484,7 +484,7 @@ Tests/gates:
   are available.
 - Browser smoke tests. Started in `docs/web-browser-smoke-harness.md` with
   required first-paint, camera-permission, first-frame, and inference-stub
-  validation gates.
+  validation gates. Added `WebSmokeReport` for the JSON report artifact schema.
 - Explicit go/no-go on client-side model distribution risk. Added a doc-backed
   regression test that keeps the production Web gates and required evidence
   visible. Added an asset audit test that fails if model binaries or encrypted

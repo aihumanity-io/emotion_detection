@@ -24,6 +24,8 @@ void main() {
     expect(WebHostedInferenceRequest, isA<Type>());
     expect(WebHostedInferenceResult, isA<Type>());
     expect(WebHostedInferenceException, isA<Type>());
+    expect(WebSmokeReport, isA<Type>());
+    expect(WebSmokeReportException, isA<Type>());
     expect(defaultEmotionModelKey, isNotEmpty);
     expect(defaultEmotionModelKeys, isNotEmpty);
     expect(defaultAndroidEmotionModelKeys, isNotEmpty);
