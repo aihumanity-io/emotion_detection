@@ -28,6 +28,185 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+def configureAppleDoubleCleanup = { androidProject ->
+    ["Debug", "Profile", "Release"].each { variantName ->
+        def variantDirName = variantName.substring(0, 1).toLowerCase(Locale.ROOT) +
+                variantName.substring(1)
+        def packagedResourceDir = "${androidProject.buildDir}/intermediates/packaged_res/" +
+                "${variantDirName}/package${variantName}Resources"
+        def mergedAssetDir = "${androidProject.buildDir}/intermediates/assets/" +
+                "${variantDirName}/merge${variantName}Assets"
+        def processedResourceDir = "${androidProject.buildDir}/intermediates/" +
+                "linked_resources_binary_format/${variantDirName}/process${variantName}Resources"
+        def stripAppleDoubleFiles = { String dirPath ->
+            def root = androidProject.file(dirPath)
+            if (!root.exists()) {
+                return
+            }
+            def sidecars = []
+            root.eachFileRecurse { candidate ->
+                if (candidate.name.startsWith("._")) {
+                    sidecars.add(candidate)
+                }
+            }
+            sidecars.reverseEach { sidecar ->
+                androidProject.delete sidecar
+            }
+        }
+
+        def stripResourceTaskName = "strip${variantName}AppleDoubleResources"
+        def stripPackagedResources = androidProject.tasks.findByName(stripResourceTaskName) ?:
+                androidProject.tasks.register(stripResourceTaskName) {
+                    group = "build"
+                    description = "Strip AppleDouble files from packaged ${variantName} resources."
+                    dependsOn("package${variantName}Resources")
+                    outputs.upToDateWhen { false }
+                    doLast {
+                        stripAppleDoubleFiles(packagedResourceDir)
+                    }
+                }
+
+        androidProject.tasks.matching {
+            it.name == "parse${variantName}LocalResources"
+        }.configureEach {
+            dependsOn(stripPackagedResources)
+        }
+
+        def stripBeforeCleanTaskName = "strip${variantName}AppleDoubleAssetsBeforeClean"
+        def stripMergedAssetsBeforeClean = androidProject.tasks.findByName(stripBeforeCleanTaskName) ?:
+                androidProject.tasks.register(stripBeforeCleanTaskName) {
+                    group = "build"
+                    description = "Strip AppleDouble files before cleaning merged ${variantName} assets."
+                    outputs.upToDateWhen { false }
+                    doLast {
+                        stripAppleDoubleFiles(mergedAssetDir)
+                    }
+                }
+
+        androidProject.tasks.matching {
+            it.name == "cleanMerge${variantName}Assets"
+        }.configureEach {
+            dependsOn(stripMergedAssetsBeforeClean)
+        }
+
+        def stripAfterMergeTaskName = "strip${variantName}AppleDoubleAssetsAfterMerge"
+        def stripMergedAssetsAfterMerge = androidProject.tasks.findByName(stripAfterMergeTaskName) ?:
+                androidProject.tasks.register(stripAfterMergeTaskName) {
+                    group = "build"
+                    description = "Strip AppleDouble files from merged ${variantName} assets."
+                    dependsOn("merge${variantName}Assets")
+                    outputs.upToDateWhen { false }
+                    doLast {
+                        stripAppleDoubleFiles(mergedAssetDir)
+                    }
+                }
+
+        androidProject.tasks.matching {
+            it.name == "compress${variantName}Assets"
+        }.configureEach {
+            dependsOn(stripMergedAssetsAfterMerge)
+        }
+
+        def stripProcessedResourcesBeforeProcess = androidProject.tasks.register(
+                "strip${variantName}AppleDoubleProcessedResourcesBeforeProcess") {
+            group = "build"
+            description = "Strip AppleDouble files before processing ${variantName} resources."
+            outputs.upToDateWhen { false }
+            doLast {
+                stripAppleDoubleFiles(processedResourceDir)
+            }
+        }
+
+        androidProject.tasks.matching {
+            it.name == "process${variantName}Resources"
+        }.configureEach {
+            dependsOn(stripProcessedResourcesBeforeProcess)
+            doFirst {
+                stripAppleDoubleFiles("${rootProject.buildDir}")
+            }
+        }
+
+        androidProject.tasks.matching {
+            it.name == "bundleLibCompileToJar${variantName}" ||
+                    it.name == "bundleLibRuntimeToJar${variantName}" ||
+                    it.name == "bundleLibRuntimeToDir${variantName}"
+        }.configureEach {
+            outputs.upToDateWhen { false }
+            doFirst {
+                stripAppleDoubleFiles("${androidProject.buildDir}")
+            }
+            doLast {
+                stripAppleDoubleFiles("${androidProject.buildDir}")
+            }
+        }
+
+        def stripDexInputsBeforeDex = androidProject.tasks.register(
+                "strip${variantName}AppleDoubleDexInputsBeforeDex") {
+            group = "build"
+            description = "Strip AppleDouble files before dexing ${variantName} classes."
+            [
+                    "compile${variantName}JavaWithJavac",
+                    "compile${variantName}Kotlin",
+                    "process${variantName}Resources",
+            ].each { producerTaskName ->
+                def producerTask = androidProject.tasks.findByName(producerTaskName)
+                if (producerTask != null) {
+                    dependsOn(producerTask)
+                }
+            }
+            outputs.upToDateWhen { false }
+            doLast {
+                stripAppleDoubleFiles("${rootProject.buildDir}")
+            }
+        }
+
+        androidProject.tasks.matching {
+            it.name == "dexBuilder${variantName}" || it.name == "mergeLibDex${variantName}"
+        }.configureEach {
+            dependsOn(stripDexInputsBeforeDex)
+        }
+
+        def stripDexArchivesBeforeMerge = androidProject.tasks.register(
+                "strip${variantName}AppleDoubleDexArchivesBeforeMerge") {
+            group = "build"
+            description = "Strip AppleDouble files before merging ${variantName} dex archives."
+            def dexBuilderTask = androidProject.tasks.findByName("dexBuilder${variantName}")
+            if (dexBuilderTask != null) {
+                dependsOn(dexBuilderTask)
+            }
+            outputs.upToDateWhen { false }
+            doLast {
+                stripAppleDoubleFiles("${rootProject.buildDir}")
+            }
+        }
+
+        androidProject.tasks.matching {
+            it.name == "mergeProjectDex${variantName}" ||
+                    it.name == "mergeLibDex${variantName}" ||
+                    it.name == "mergeExtDex${variantName}"
+        }.configureEach {
+            dependsOn(stripDexArchivesBeforeMerge)
+        }
+    }
+}
+
+subprojects { subproject ->
+    def configureIfAndroid = {
+        if (subproject.plugins.hasPlugin("com.android.application") ||
+                subproject.plugins.hasPlugin("com.android.library")) {
+            configureAppleDoubleCleanup(subproject)
+        }
+    }
+
+    if (subproject.state.executed) {
+        configureIfAndroid()
+    } else {
+        afterEvaluate {
+            configureIfAndroid()
+        }
+    }
+}
+
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }

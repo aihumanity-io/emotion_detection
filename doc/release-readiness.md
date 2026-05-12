@@ -64,6 +64,21 @@ flutter build ios --debug --no-codesign
 The example app must keep a `version` field so iOS builds include
 `CFBundleShortVersionString` and `CFBundleVersion`.
 
+## Local Android Build Smoke
+
+Use a debug APK build for Android compile/package validation:
+
+```sh
+cd example
+flutter build apk --debug
+```
+
+On external volumes, Gradle resource packaging, class bundling, dexing, and
+asset merge steps can create AppleDouble `._*` sidecar files. The example
+Android Gradle build strips those files across Android subprojects before the
+affected packaging steps so debug APK builds remain repeatable on this
+workspace.
+
 ## Web Gate
 
 Web is not part of the stable SDK release scope while

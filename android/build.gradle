@@ -86,6 +86,43 @@ android {
     }
 }
 
+["Debug", "Profile", "Release"].each { variantName ->
+    def variantDirName = variantName.substring(0, 1).toLowerCase(Locale.ROOT) +
+            variantName.substring(1)
+    def packagedResourceDir = "${buildDir}/intermediates/packaged_res/" +
+            "${variantDirName}/package${variantName}Resources"
+    def stripAppleDoubleFiles = { String dirPath ->
+        def root = file(dirPath)
+        if (!root.exists()) {
+            return
+        }
+        def sidecars = []
+        root.eachFileRecurse { candidate ->
+            if (candidate.name.startsWith("._")) {
+                sidecars.add(candidate)
+            }
+        }
+        sidecars.reverseEach { sidecar ->
+            delete sidecar
+        }
+    }
+
+    def stripPackagedResources = tasks.register(
+            "strip${variantName}AppleDoubleResources") {
+        group = "build"
+        description = "Strip AppleDouble files from packaged ${variantName} resources."
+        dependsOn("package${variantName}Resources")
+        outputs.upToDateWhen { false }
+        doLast {
+            stripAppleDoubleFiles(packagedResourceDir)
+        }
+    }
+
+    tasks.matching { it.name == "parse${variantName}LocalResources" }.configureEach {
+        dependsOn(stripPackagedResources)
+    }
+}
+
 afterEvaluate {
     publishing {
         publications {
