@@ -475,7 +475,9 @@ Tests/gates:
   `docs/web-performance-baseline.md` with a checked-in Web source shell budget
   and prototype reporting requirements before generated release bundle reports
   are available.
-- Browser smoke tests.
+- Browser smoke tests. Started in `docs/web-browser-smoke-harness.md` with
+  required first-paint, camera-permission, first-frame, and inference-stub
+  validation gates.
 - Explicit go/no-go on client-side model distribution risk. Added a doc-backed
   regression test that keeps the production Web gates and required evidence
   visible. Added an asset audit test that fails if model binaries or encrypted

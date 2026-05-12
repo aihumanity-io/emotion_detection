@@ -54,3 +54,7 @@ to the Web sample while this decision remains no-go.
 
 The same test also enforces the source Web shell budget documented in
 `docs/web-performance-baseline.md` before larger prototype assets are added.
+
+Browser smoke work is scoped in `docs/web-browser-smoke-harness.md`; it uses
+camera/frame plumbing plus a hosted inference stub until the model exposure
+decision changes.
