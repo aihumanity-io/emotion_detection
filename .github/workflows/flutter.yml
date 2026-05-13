@@ -29,3 +29,20 @@ jobs:
 
       - name: Publish dry-run
         run: flutter pub publish --dry-run
+
+  native:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure native SDK
+        run: cmake --preset host-release
+
+      - name: Build native SDK
+        run: cmake --build --preset host-release --parallel
+
+      - name: Test native SDK
+        run: ctest --preset host-release

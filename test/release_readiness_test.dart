@@ -9,6 +9,8 @@ void main() {
     expect(doc, contains('Status: not ready for a stable public SDK release.'));
     expect(doc, contains('native alpha / release candidate'));
     expect(doc, contains('flutter pub publish --dry-run'));
+    expect(doc, contains('cmake --preset host-release'));
+    expect(doc, contains('ctest --preset host-release'));
     expect(doc, contains('Example app smoke on every advertised platform.'));
     expect(doc, contains('Local macOS Build Smoke'));
     expect(doc, contains('CODE_SIGNING_ALLOWED=NO'));

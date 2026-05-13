@@ -12,6 +12,12 @@ void main() {
     expect(workflow, contains('flutter test'));
     expect(workflow, contains('flutter analyze'));
     expect(workflow, contains('flutter pub publish --dry-run'));
+    expect(workflow, contains('native:'));
+    expect(workflow, contains('working-directory: native'));
+    expect(workflow, contains('cmake --preset host-release'));
+    expect(
+        workflow, contains('cmake --build --preset host-release --parallel'));
+    expect(workflow, contains('ctest --preset host-release'));
     expect(workflow, contains('"codex/**"'));
   });
 }

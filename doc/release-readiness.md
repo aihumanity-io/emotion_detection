@@ -29,6 +29,8 @@ validation and platform smoke gates pass.
 - `flutter analyze`
 - `flutter test`
 - `flutter pub publish --dry-run`
+- Native CMake host build and CTest from `native/`: `cmake --preset host-release`,
+  `cmake --build --preset host-release --parallel`, and `ctest --preset host-release`.
 - Example app smoke on every advertised platform.
 - Permission and entitlement docs verified for every advertised platform.
 - Model asset scope accepted, including package archive size and encrypted model
