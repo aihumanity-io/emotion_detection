@@ -7,6 +7,7 @@ option(EMOTION_SDK_BUILD_INSTALLABLE "Build installable native SDK package targe
 option(EMOTION_ENABLE_ONNX_RUNTIME "Link native SDK against ONNX Runtime" OFF)
 option(EMOTION_ENABLE_LIBSECRET "Link Linux SDK secure store against libsecret" OFF)
 set(ONNXRUNTIME_ROOT "" CACHE PATH "ONNX Runtime package root")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(CMakePackageConfigHelpers)
 include(FetchContent)
