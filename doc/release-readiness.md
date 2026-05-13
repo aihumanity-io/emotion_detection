@@ -86,6 +86,15 @@ Android Gradle build strips those files across Android subprojects before the
 affected packaging steps so debug APK builds remain repeatable on this
 workspace.
 
+## Permission And Entitlement Gate
+
+Before an alpha or release-candidate tag, verify camera permissions and macOS
+entitlements are present in the example app and documented for SDK consumers:
+
+```sh
+flutter test test/platform_permissions_test.dart
+```
+
 ## Web Gate
 
 Web is not part of the stable SDK release scope while
