@@ -39,6 +39,9 @@ FetchContent_Declare(
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(mbedtls)
+set(EMOTION_MBEDTLS_INCLUDE_DIRS
+  "${mbedtls_SOURCE_DIR}/include"
+  "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5/include")
 
 add_library(emotion_sdk_headers INTERFACE)
 target_include_directories(emotion_sdk_headers INTERFACE
@@ -70,7 +73,7 @@ target_include_directories(emotion_native_core PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
   "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 target_include_directories(emotion_native_core PRIVATE
-  "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5/include")
+  ${EMOTION_MBEDTLS_INCLUDE_DIRS})
 target_link_libraries(emotion_native_core PRIVATE
   mbedcrypto
   nlohmann_json::nlohmann_json)
@@ -113,7 +116,7 @@ if(EMOTION_SDK_BUILD_INSTALLABLE)
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
   target_include_directories(emotion_sdk PRIVATE
-    "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5/include")
+    ${EMOTION_MBEDTLS_INCLUDE_DIRS})
   target_compile_definitions(emotion_sdk PRIVATE EMOTION_SDK_BUILDING_SHARED)
   target_link_libraries(emotion_sdk PRIVATE
     mbedcrypto
