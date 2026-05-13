@@ -67,4 +67,14 @@ void main() {
       expect(manifestJson['wrap'], isA<Map<String, Object?>>());
     }
   });
+
+  test('encrypted model payloads and native fixtures are checked out binary',
+      () {
+    final attributes = File('.gitattributes').readAsStringSync();
+
+    expect(attributes, contains('*.enc binary'));
+    expect(attributes, contains('*.onnx binary'));
+    expect(attributes, contains('*.pb binary'));
+    expect(attributes, contains('*.ppm binary'));
+  });
 }
