@@ -35,13 +35,19 @@ set(ENABLE_PROGRAMS OFF CACHE BOOL "Disable mbedTLS programs" FORCE)
 FetchContent_Declare(
   mbedtls
   URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.5/mbedtls-3.6.5.tar.bz2
-  SOURCE_SUBDIR mbedtls-3.6.5
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-FetchContent_MakeAvailable(mbedtls)
+FetchContent_GetProperties(mbedtls)
+if(NOT mbedtls_POPULATED)
+  FetchContent_Populate(mbedtls)
+endif()
+set(EMOTION_MBEDTLS_SOURCE_DIR "${mbedtls_SOURCE_DIR}")
+if(EXISTS "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5/CMakeLists.txt")
+  set(EMOTION_MBEDTLS_SOURCE_DIR "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5")
+endif()
+add_subdirectory("${EMOTION_MBEDTLS_SOURCE_DIR}" "${mbedtls_BINARY_DIR}" EXCLUDE_FROM_ALL)
 set(EMOTION_MBEDTLS_INCLUDE_DIRS
-  "${mbedtls_SOURCE_DIR}/include"
-  "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5/include")
+  "${EMOTION_MBEDTLS_SOURCE_DIR}/include")
 if(TARGET MbedTLS::mbedcrypto)
   set(EMOTION_MBEDCRYPTO_TARGET MbedTLS::mbedcrypto)
 elseif(TARGET mbedcrypto)
