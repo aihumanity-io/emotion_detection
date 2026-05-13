@@ -95,6 +95,21 @@ entitlements are present in the example app and documented for SDK consumers:
 flutter test test/platform_permissions_test.dart
 ```
 
+## Model Asset Scope Gate
+
+The package currently carries encrypted production model payloads for native
+example/runtime validation. Keep plaintext production model binaries out of SDK
+asset roots and re-check encrypted payload size before tagging:
+
+```sh
+flutter test test/model_asset_scope_test.dart
+flutter pub publish --dry-run
+```
+
+The May 2026 dry-run archive is about 71 MB because the encrypted payload is
+included for both package assets and the Android example. Treat material growth
+above that as a release review item before publishing.
+
 ## Web Gate
 
 Web is not part of the stable SDK release scope while

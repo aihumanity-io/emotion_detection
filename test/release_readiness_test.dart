@@ -20,6 +20,9 @@ void main() {
     expect(doc, contains('./gradlew :emotion_detection:testDebugUnitTest'));
     expect(doc, contains('Permission And Entitlement Gate'));
     expect(doc, contains('test/platform_permissions_test.dart'));
+    expect(doc, contains('Model Asset Scope Gate'));
+    expect(doc, contains('test/model_asset_scope_test.dart'));
+    expect(doc, contains('71 MB'));
     expect(doc, contains('Web | Evaluation only'));
     expect(doc, contains('distribution is no-go'));
   });
