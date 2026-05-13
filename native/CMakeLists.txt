@@ -42,6 +42,15 @@ FetchContent_MakeAvailable(mbedtls)
 set(EMOTION_MBEDTLS_INCLUDE_DIRS
   "${mbedtls_SOURCE_DIR}/include"
   "${mbedtls_SOURCE_DIR}/mbedtls-3.6.5/include")
+if(TARGET MbedTLS::mbedcrypto)
+  set(EMOTION_MBEDCRYPTO_TARGET MbedTLS::mbedcrypto)
+elseif(TARGET mbedcrypto)
+  set(EMOTION_MBEDCRYPTO_TARGET mbedcrypto)
+elseif(TARGET mbedcrypto_static)
+  set(EMOTION_MBEDCRYPTO_TARGET mbedcrypto_static)
+else()
+  message(FATAL_ERROR "mbedTLS FetchContent did not expose an mbedcrypto target")
+endif()
 
 add_library(emotion_sdk_headers INTERFACE)
 target_include_directories(emotion_sdk_headers INTERFACE
@@ -75,7 +84,7 @@ target_include_directories(emotion_native_core PUBLIC
 target_include_directories(emotion_native_core PRIVATE
   ${EMOTION_MBEDTLS_INCLUDE_DIRS})
 target_link_libraries(emotion_native_core PRIVATE
-  mbedcrypto
+  ${EMOTION_MBEDCRYPTO_TARGET}
   nlohmann_json::nlohmann_json)
 if(EMOTION_ENABLE_LIBSECRET)
   target_compile_definitions(emotion_native_core PUBLIC EMOTION_ENABLE_LIBSECRET=1)
@@ -119,7 +128,7 @@ if(EMOTION_SDK_BUILD_INSTALLABLE)
     ${EMOTION_MBEDTLS_INCLUDE_DIRS})
   target_compile_definitions(emotion_sdk PRIVATE EMOTION_SDK_BUILDING_SHARED)
   target_link_libraries(emotion_sdk PRIVATE
-    mbedcrypto
+    ${EMOTION_MBEDCRYPTO_TARGET}
     nlohmann_json::nlohmann_json)
   if(EMOTION_ENABLE_LIBSECRET)
     target_compile_definitions(emotion_sdk PUBLIC EMOTION_ENABLE_LIBSECRET=1)
