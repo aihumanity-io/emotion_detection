@@ -22,6 +22,13 @@ FetchContent_Declare(
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(nlohmann_json)
+if(NOT TARGET nlohmann_json::nlohmann_json)
+  add_library(nlohmann_json_fallback INTERFACE)
+  target_include_directories(nlohmann_json_fallback INTERFACE
+    "${nlohmann_json_SOURCE_DIR}/include"
+    "${nlohmann_json_SOURCE_DIR}/single_include")
+  add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json_fallback)
+endif()
 
 set(ENABLE_TESTING OFF CACHE BOOL "Disable mbedTLS tests" FORCE)
 set(ENABLE_PROGRAMS OFF CACHE BOOL "Disable mbedTLS programs" FORCE)
