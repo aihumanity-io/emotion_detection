@@ -46,3 +46,25 @@ jobs:
 
       - name: Test native SDK
         run: ctest --preset host-release
+
+  native-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure native SDK
+        run: >
+          cmake -S native -B build/native-windows
+          -G "Visual Studio 17 2022" -A x64
+          -DEMOTION_SDK_BUILD_TESTS=ON
+          -DEMOTION_SDK_BUILD_INSTALLABLE=ON
+          -DEMOTION_ENABLE_ONNX_RUNTIME=OFF
+
+      - name: Build native SDK
+        run: cmake --build build/native-windows --config Release --parallel
+
+      - name: Test native SDK
+        run: ctest --test-dir build/native-windows -C Release --output-on-failure

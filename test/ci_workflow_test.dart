@@ -18,6 +18,15 @@ void main() {
     expect(
         workflow, contains('cmake --build --preset host-release --parallel'));
     expect(workflow, contains('ctest --preset host-release'));
+    expect(workflow, contains('native-windows:'));
+    expect(workflow, contains('windows-latest'));
+    expect(workflow, contains('Visual Studio 17 2022'));
+    expect(workflow, contains('build/native-windows'));
+    expect(workflow, contains('-DEMOTION_SDK_BUILD_TESTS=ON'));
+    expect(workflow, contains('-DEMOTION_SDK_BUILD_INSTALLABLE=ON'));
+    expect(workflow, contains('-DEMOTION_ENABLE_ONNX_RUNTIME=OFF'));
+    expect(
+        workflow, contains('ctest --test-dir build/native-windows -C Release'));
     expect(workflow, contains('"codex/**"'));
   });
 }

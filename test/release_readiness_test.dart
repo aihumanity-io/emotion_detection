@@ -11,6 +11,13 @@ void main() {
     expect(doc, contains('flutter pub publish --dry-run'));
     expect(doc, contains('cmake --preset host-release'));
     expect(doc, contains('ctest --preset host-release'));
+    expect(doc, contains('Native Windows CI'));
+    expect(doc, contains('emotion_windows_secure_store_test'));
+    expect(doc, contains('windows-latest'));
+    expect(doc, contains('doc/release-tag-checklist.md'));
+    expect(doc, contains('May 13 2026 Smoke Results'));
+    expect(doc, contains('macOS runtime integration | Blocked'));
+    expect(doc, contains('Android JVM plugin tests | Pass'));
     expect(doc, contains('Example app smoke on every advertised platform.'));
     expect(doc, contains('Local macOS Build Smoke'));
     expect(doc, contains('CODE_SIGNING_ALLOWED=NO'));
