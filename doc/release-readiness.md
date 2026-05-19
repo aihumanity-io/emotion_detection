@@ -52,7 +52,7 @@ validation and platform smoke gates pass.
 | iOS real-device runtime | Blocked | Wireless iPhone 15 Pro run failed before install: `Cannot start app on wirelessly tethered iOS device`; this Flutter channel does not expose `flutter test --publish-port`. |
 | Android debug APK | Pass | `flutter build apk --debug` built `build/app/outputs/flutter-apk/app-debug.apk`. |
 | Android JVM plugin tests | Pass | `./gradlew :emotion_detection:testDebugUnitTest` passed 14 tests. |
-| Windows native CTest | Pending CI | Covered by the `native-windows` GitHub Actions job on `windows-latest`. |
+| Windows native CTest | Pass (CI) | `native-windows` job passed on `windows-latest` (GitHub Actions run `25826340472`). |
 
 ## Local macOS Build Smoke
 
