@@ -49,6 +49,8 @@ example/linux/flutter/ephemeral/
 ._*
 *.log
 *.lock.json
+example/.env
+example/.env*
 example/defines.json
 Generated.xcconfig
 !test/
