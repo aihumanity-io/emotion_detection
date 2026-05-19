@@ -2,6 +2,8 @@ platform :osx, '11.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+ENV['COPYFILE_DISABLE'] = '1'
+ENV['COPY_EXTENDED_ATTRIBUTES_DISABLE'] = '1'
 
 project 'Runner', {
   'Debug' => :debug,
@@ -25,6 +27,14 @@ end
 require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
 
 flutter_macos_podfile_setup
+
+pre_install do |_installer|
+  pods_root = File.expand_path('Pods', __dir__)
+  next unless Dir.exist?(pods_root)
+
+  system('dot_clean', '-m', pods_root) if system('command', '-v', 'dot_clean', out: File::NULL, err: File::NULL)
+  system('/usr/bin/find', pods_root, '-name', '._*', '-exec', '/bin/rm', '-f', '{}', '+')
+end
 
 target 'Runner' do
   use_frameworks!
@@ -54,6 +64,26 @@ fi
 SCRIPT
 end
 
+def add_appledouble_cleanup_phase_to_runner(user_target)
+  return unless user_target.name == 'Runner'
+
+  phase_name = 'Strip AppleDouble files'
+  phase = user_target.shell_script_build_phases.find { |build_phase| build_phase.name == phase_name }
+  phase ||= user_target.new_shell_script_build_phase(phase_name)
+  phase.shell_script = <<-'SCRIPT'
+export COPYFILE_DISABLE=1
+export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
+
+app_path="${TARGET_BUILD_DIR}/${WRAPPER_NAME}"
+if [ -d "$app_path" ]; then
+  if command -v dot_clean >/dev/null 2>&1; then
+    dot_clean -m "$app_path" || true
+  fi
+  /usr/bin/find "$app_path" -name '._*' -exec /bin/rm -f {} +
+fi
+SCRIPT
+end
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
@@ -62,5 +92,16 @@ post_install do |installer|
     target.build_configurations.each do |config|
       config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '11.0'
     end
+  end
+
+  installer.aggregate_targets.each do |aggregate_target|
+    user_project = aggregate_target.user_project
+    next if user_project.nil?
+
+    user_project.targets.each do |user_target|
+      add_appledouble_cleanup_phase_to_runner(user_target)
+    end
+
+    user_project.save
   end
 end

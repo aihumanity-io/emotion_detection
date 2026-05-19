@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:io' show Platform;
 
 import 'package:emotion_detection/emotion_detection.dart';
 
@@ -17,6 +18,37 @@ const String _modelKeyFromDefine = String.fromEnvironment(
   'EXAMPLE_MODEL_KEY',
   defaultValue: '',
 );
+
+const String _sdkKeyIdFromDefine =
+    String.fromEnvironment('SDK_KEY_ID', defaultValue: '');
+const String _sdkKeySecretFromDefine =
+    String.fromEnvironment('SDK_KEY_SECRET', defaultValue: '');
+const String _exampleUserNameFromDefine =
+    String.fromEnvironment('EXAMPLE_USER_NAME', defaultValue: '');
+const String _exampleServerBaseUrlFromDefine =
+    String.fromEnvironment('EXAMPLE_SERVER_BASE_URL', defaultValue: '');
+const String _exampleModelAadFromDefine =
+    String.fromEnvironment('EXAMPLE_MODEL_AAD', defaultValue: '');
+const String _exampleModelAadMacosFromDefine =
+    String.fromEnvironment('EXAMPLE_MODEL_AAD_MACOS', defaultValue: '');
+const String _exampleModelAadIosFromDefine =
+    String.fromEnvironment('EXAMPLE_MODEL_AAD_IOS', defaultValue: '');
+const String _exampleModelAadAndroidFromDefine =
+    String.fromEnvironment('EXAMPLE_MODEL_AAD_ANDROID', defaultValue: '');
+
+String _pickValue(
+  String fromDefine,
+  Map<String, String> dotenvEnv,
+  String key,
+) {
+  final defineValue = fromDefine.trim();
+  if (defineValue.isNotEmpty) return defineValue;
+
+  final dotenvValue = (dotenvEnv[key] ?? '').trim();
+  if (dotenvValue.isNotEmpty) return dotenvValue;
+
+  return (Platform.environment[key] ?? '').trim();
+}
 
 final List<int> _tinyPngBytes = <int>[
   0x89,
@@ -109,26 +141,46 @@ void main() {
       return;
     }
 
+    Map<String, String> dotenvEnv = <String, String>{};
     try {
       await dotenv.load(fileName: '.env');
-    } catch (_) {}
-    final env = dotenv.env;
-    final preferredModelKey = _modelKeyFromDefine.trim().isNotEmpty
-        ? _modelKeyFromDefine.trim()
-        : (env['EXAMPLE_MODEL_KEY'] ?? '').trim();
+      dotenvEnv = dotenv.env;
+    } catch (_) {
+      dotenvEnv = <String, String>{};
+    }
+
+    final preferredModelKey =
+        _pickValue(_modelKeyFromDefine, dotenvEnv, 'EXAMPLE_MODEL_KEY');
+
     final provisioner = EmotionDetectionProvisioner(
-      sdkKeyId: env['SDK_KEY_ID'] ?? '',
-      sdkKeySecret: env['SDK_KEY_SECRET'] ?? '',
-      serverBaseUrl: env['EXAMPLE_SERVER_BASE_URL'],
-      userName: env['EXAMPLE_USER_NAME'] ?? '',
+      sdkKeyId: _pickValue(_sdkKeyIdFromDefine, dotenvEnv, 'SDK_KEY_ID'),
+      sdkKeySecret:
+          _pickValue(_sdkKeySecretFromDefine, dotenvEnv, 'SDK_KEY_SECRET'),
+      serverBaseUrl: _pickValue(
+        _exampleServerBaseUrlFromDefine,
+        dotenvEnv,
+        'EXAMPLE_SERVER_BASE_URL',
+      ),
+      userName: _pickValue(
+          _exampleUserNameFromDefine, dotenvEnv, 'EXAMPLE_USER_NAME'),
       modelKey: preferredModelKey.isEmpty
-          ? env['EXAMPLE_MODEL_KEY']
+          ? dotenvEnv['EXAMPLE_MODEL_KEY']
           : preferredModelKey,
       modelKeys: preferredModelKey.isEmpty ? null : <String>[preferredModelKey],
-      aad: env['EXAMPLE_MODEL_AAD'],
-      iosAad: env['EXAMPLE_MODEL_AAD_IOS'],
-      macosAad: env['EXAMPLE_MODEL_AAD_MACOS'],
-      androidAad: env['EXAMPLE_MODEL_AAD_ANDROID'],
+      aad: _pickValue(
+          _exampleModelAadFromDefine, dotenvEnv, 'EXAMPLE_MODEL_AAD'),
+      iosAad: _pickValue(
+          _exampleModelAadIosFromDefine, dotenvEnv, 'EXAMPLE_MODEL_AAD_IOS'),
+      macosAad: _pickValue(
+        _exampleModelAadMacosFromDefine,
+        dotenvEnv,
+        'EXAMPLE_MODEL_AAD_MACOS',
+      ),
+      androidAad: _pickValue(
+        _exampleModelAadAndroidFromDefine,
+        dotenvEnv,
+        'EXAMPLE_MODEL_AAD_ANDROID',
+      ),
     );
     expect(
       provisioner.hasRequiredConfig,

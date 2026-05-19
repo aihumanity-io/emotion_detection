@@ -242,6 +242,7 @@
 				4413D084424ADF1BD8D15B41 /* [CP] Copy Pods Resources */,
 				2C03426F5F232DAB9BD93247 /* [CP] Embed Pods Frameworks */,
 				FDCD0A0B0C0D0E0F00000001 /* Strip App AppleDouble files */,
+				F617B2E24224F9064999DCE5 /* Strip AppleDouble files */,
 			);
 			buildRules = (
 			);
@@ -439,6 +440,24 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-resources.sh\"\n";
 			showEnvVarsInLog = 0;
+		};
+		F617B2E24224F9064999DCE5 /* Strip AppleDouble files */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Strip AppleDouble files";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "export COPYFILE_DISABLE=1\nexport COPY_EXTENDED_ATTRIBUTES_DISABLE=1\n\napp_path=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\"\nif [ -d \"$app_path\" ]; then\n  if command -v dot_clean >/dev/null 2>&1; then\n    dot_clean -m \"$app_path\" || true\n  fi\n  /usr/bin/find \"$app_path\" -name '._*' -exec /bin/rm -f {} +\nfi\n";
 		};
 		FDCD0A0B0C0D0E0F00000001 /* Strip App AppleDouble files */ = {
 			isa = PBXShellScriptBuildPhase;
