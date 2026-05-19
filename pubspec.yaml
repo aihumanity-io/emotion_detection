@@ -1,8 +1,8 @@
 name: emotion_detection
 description: "Emotion detection SDK."
 version: 0.2.0
-homepage: https://github.com/fdchiu/emotion_detection
-repository: https://github.com/fdchiu/emotion_detection
+repository: https://github.com/aihumanity-io/emotion_detection
+homepage: https://github.com/aihumanity-io/emotion_detection
 
 environment:
   sdk: ^3.6.1
