@@ -76,11 +76,11 @@ After email verification:
 
 ## 4. Create Local Secrets
 
-Create `example/.env`:
+Create `example/env`:
 
 ```bash
 cd example
-cat > .env <<'EOF'
+cat > env <<'EOF'
 SDK_KEY_ID=your-sdk-key-id
 SDK_KEY_SECRET=your-sdk-key-secret
 EXAMPLE_USER_NAME=your-verified-email@example.com
@@ -88,13 +88,13 @@ EXAMPLE_SERVER_BASE_URL=https://backend.aihumanity.io
 EOF
 ```
 
-Keep `example/.env` local. Do not commit real SDK credentials.
+Keep `example/env` local. Do not commit real SDK credentials.
 
 The screenshot error:
 
 ```text
 Missing SDK_KEY_ID/SDK_KEY_SECRET.
-Provide via .env, environment, or --dart-define.
+Provide via env file, environment, or --dart-define.
 ```
 
 means `example/.env` is missing, empty, not rebuilt into the app, or the
@@ -109,8 +109,8 @@ EXAMPLE_MODEL_AAD_MACOS=com.creataai.emotionsdk/ios
 EXAMPLE_MODEL_AAD_ANDROID=com.creataai.emotionsdk/android
 ```
 
-The example app currently reads `example/.env` and process environment values.
-Use `.env` for iOS. Shell environment variables may work for `flutter run -d
+The example app currently reads `example/env` and process environment values.
+Use `env` for iOS. Shell environment variables may work for `flutter run -d
 macos`, but are not the recommended path for device builds.
 
 ## 5. Install Dependencies
@@ -258,7 +258,7 @@ The encrypted model assets and decryption method are unchanged.
 
 ### Missing SDK keys
 
-Fix `example/.env`, then fully rebuild:
+Fix `example/env`, then fully rebuild:
 
 ```bash
 flutter clean

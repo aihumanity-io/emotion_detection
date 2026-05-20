@@ -143,7 +143,7 @@ void main() {
 
     Map<String, String> dotenvEnv = <String, String>{};
     try {
-      await dotenv.load(fileName: '.env');
+      await dotenv.load(fileName: 'env');
       dotenvEnv = dotenv.env;
     } catch (_) {
       dotenvEnv = <String, String>{};

@@ -79,9 +79,9 @@ String _firstNonEmpty(List<String> values) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Load optional .env for local SDK keys (macOS/desktop-friendly)
+  // Load optional env file for local SDK keys (external-volume friendly).
   try {
-    await dotenv.load(fileName: '.env');
+    await dotenv.load(fileName: 'env');
   } catch (_) {}
   // Guard camera warm-up on desktop/web to avoid MissingPluginException.
   if (Platform.isAndroid || Platform.isIOS) {
@@ -315,7 +315,7 @@ class _MyAppState extends State<MyApp> {
     if (!_provisioner.hasRequiredConfig) {
       setState(() {
         _cekSecretStatus =
-            'Missing SDK_KEY_ID/SDK_KEY_SECRET. Provide via .env, environment, or --dart-define.';
+            'Missing SDK_KEY_ID/SDK_KEY_SECRET. Provide via env file, environment, or --dart-define.';
       });
       return;
     }

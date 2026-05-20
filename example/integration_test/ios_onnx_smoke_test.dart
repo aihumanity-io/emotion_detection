@@ -29,7 +29,7 @@ void main() {
     }
 
     try {
-      await dotenv.load(fileName: '.env');
+      await dotenv.load(fileName: 'env');
     } catch (_) {}
     final env = dotenv.env;
 
