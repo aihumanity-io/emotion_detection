@@ -29,11 +29,17 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
     throw UnimplementedError('getPlatformVersion() has not been implemented.');
   }
 
-  Stream<Map<String, double>> macCameraStream({String? modelId}) {
+  Stream<Map<String, double>> macCameraStream({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
     throw UnimplementedError('macCameraStream() has not been implemented.');
   }
 
-  Future<void> macShowCameraPreview({String? modelId}) {
+  Future<void> macShowCameraPreview({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
     throw UnimplementedError(
       'macShowCameraPreview() has not been implemented.',
     );

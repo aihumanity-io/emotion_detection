@@ -56,4 +56,16 @@ void main() {
     expect(source, contains('DispatchQueue.main.async { [weak self] in'));
     expect(RegExp(r'cameraEventSink\?\(').allMatches(source), hasLength(2));
   });
+
+  test('macOS face crop debugging can dump cropped images', () {
+    final source =
+        File('macos/Classes/EmotionDetectionPlugin.swift').readAsStringSync();
+
+    expect(source, contains('EMOTION_DEBUG_FACE_CROP'));
+    expect(source, contains('debugFaceCrop'));
+    expect(source, contains('paddedSquare'));
+    expect(source, contains('scale: 1.25'));
+    expect(source, contains('emotion_face_crop_%@_%04d.png'));
+    expect(source, contains('face crop debug source='));
+  });
 }

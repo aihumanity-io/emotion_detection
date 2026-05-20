@@ -45,13 +45,24 @@ class EmotionDetection {
     );
   }
 
-  Stream<Map<String, double>> macCameraStream({String? modelId}) {
-    return EmotionDetectionPlatform.instance.macCameraStream(modelId: modelId);
+  Stream<Map<String, double>> macCameraStream({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
+    return EmotionDetectionPlatform.instance.macCameraStream(
+      modelId: modelId,
+      debugFaceCrop: debugFaceCrop,
+    );
   }
 
-  Future<void> macShowCameraPreview({String? modelId}) {
-    return EmotionDetectionPlatform.instance
-        .macShowCameraPreview(modelId: modelId);
+  Future<void> macShowCameraPreview({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
+    return EmotionDetectionPlatform.instance.macShowCameraPreview(
+      modelId: modelId,
+      debugFaceCrop: debugFaceCrop,
+    );
   }
 
   Future<void> macHideCameraPreview() {

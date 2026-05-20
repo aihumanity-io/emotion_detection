@@ -8,6 +8,8 @@ class _FakeEmotionDetectionPlatform
     implements EmotionDetectionPlatform {
   String? streamModelId;
   String? previewModelId;
+  bool? streamDebugFaceCrop;
+  bool? previewDebugFaceCrop;
   var hidePreviewCallCount = 0;
   Map<String, dynamic>? savedUserCode;
   Map<String, dynamic>? clearedUserCode;
@@ -26,14 +28,22 @@ class _FakeEmotionDetectionPlatform
   Future<String?> getPlatformVersion() async => '42';
 
   @override
-  Stream<Map<String, double>> macCameraStream({String? modelId}) {
+  Stream<Map<String, double>> macCameraStream({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
     streamModelId = modelId;
+    streamDebugFaceCrop = debugFaceCrop;
     return Stream<Map<String, double>>.value({'happy': 0.75});
   }
 
   @override
-  Future<void> macShowCameraPreview({String? modelId}) async {
+  Future<void> macShowCameraPreview({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) async {
     previewModelId = modelId;
+    previewDebugFaceCrop = debugFaceCrop;
   }
 
   @override
@@ -169,10 +179,14 @@ void main() {
     EmotionDetectionPlatform.instance = platform;
 
     await expectLater(
-      EmotionDetection().macCameraStream(modelId: 'model-a'),
+      EmotionDetection().macCameraStream(
+        modelId: 'model-a',
+        debugFaceCrop: true,
+      ),
       emits({'happy': 0.75}),
     );
     expect(platform.streamModelId, 'model-a');
+    expect(platform.streamDebugFaceCrop, isTrue);
   });
 
   test('mac camera preview controls delegate to platform implementation',
@@ -180,10 +194,14 @@ void main() {
     final platform = _FakeEmotionDetectionPlatform();
     EmotionDetectionPlatform.instance = platform;
 
-    await EmotionDetection().macShowCameraPreview(modelId: 'model-b');
+    await EmotionDetection().macShowCameraPreview(
+      modelId: 'model-b',
+      debugFaceCrop: true,
+    );
     await EmotionDetection().macHideCameraPreview();
 
     expect(platform.previewModelId, 'model-b');
+    expect(platform.previewDebugFaceCrop, isTrue);
     expect(platform.hidePreviewCallCount, 1);
   });
 

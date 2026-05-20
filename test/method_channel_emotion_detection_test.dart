@@ -24,12 +24,18 @@ void main() {
       return null;
     });
 
-    await platform.macShowCameraPreview(modelId: 'model-a');
+    await platform.macShowCameraPreview(
+      modelId: 'model-a',
+      debugFaceCrop: true,
+    );
     await platform.macHideCameraPreview();
 
     expect(calls, hasLength(2));
     expect(calls[0].method, 'showMacCameraPreview');
-    expect(calls[0].arguments, <String, dynamic>{'modelId': 'model-a'});
+    expect(calls[0].arguments, <String, dynamic>{
+      'modelId': 'model-a',
+      'debugFaceCrop': true,
+    });
     expect(calls[1].method, 'hideMacCameraPreview');
     expect(calls[1].arguments, isNull);
   });

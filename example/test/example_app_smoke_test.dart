@@ -12,12 +12,18 @@ class _FakeEmotionDetectionPlatform
   Future<String?> getPlatformVersion() async => 'test-platform';
 
   @override
-  Stream<Map<String, double>> macCameraStream({String? modelId}) {
+  Stream<Map<String, double>> macCameraStream({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
     return const Stream<Map<String, double>>.empty();
   }
 
   @override
-  Future<void> macShowCameraPreview({String? modelId}) async {}
+  Future<void> macShowCameraPreview({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) async {}
 
   @override
   Future<void> macHideCameraPreview() async {}

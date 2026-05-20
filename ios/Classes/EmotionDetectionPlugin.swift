@@ -172,6 +172,9 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         switch call.method {
         case "getPlatformVersion":
             result("iOS " + UIDevice.current.systemVersion)
+
+        case "getProcessEnvironment":
+            result(ProcessInfo.processInfo.environment)
             
         case "faceEmotion":
             self.faceEmotionDetection(result: result, call: call)

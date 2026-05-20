@@ -17,6 +17,8 @@ void main() {
       final main = File('example/lib/main.dart').readAsStringSync();
 
       expect(main, contains("_loadLocalEnvFileIfPresent()"));
+      expect(main, contains("_loadNativeProcessEnvironmentIfPresent()"));
+      expect(main, contains("'getProcessEnvironment'"));
       expect(main, contains("'example/env'"));
     });
   });

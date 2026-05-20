@@ -22,6 +22,8 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
   private let ciContext = CIContext(options: nil)
   private var isProcessingFrame = false
   private var currentModelId: String = "aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx"
+  private var debugFaceCrop = false
+  private var debugCropDumpCount = 0
 
   // Preview window/layer for macOS camera
   private var previewWindow: NSWindow?
@@ -49,6 +51,10 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
       result("macOS " + ProcessInfo.processInfo.operatingSystemVersionString)
       return
     }
+    if call.method == "getProcessEnvironment" {
+      result(ProcessInfo.processInfo.environment)
+      return
+    }
 
     // Runtime methods
     switch call.method {
@@ -70,7 +76,9 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
       // No-op for macOS; models are loaded lazily on first predict.
       result(true)
     case "showMacCameraPreview":
-      if let args = call.arguments as? [String: Any], let mid = args["modelId"] as? String, !mid.isEmpty { currentModelId = mid }
+      if let args = call.arguments as? [String: Any] {
+        applyCameraArguments(args)
+      }
       showPreviewWindow()
       result(nil)
     case "hideMacCameraPreview":
@@ -93,8 +101,8 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
 extension EmotionDetectionPlugin: FlutterStreamHandler, AVCaptureVideoDataOutputSampleBufferDelegate {
   public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     cameraEventSink = events
-    if let args = arguments as? [String: Any], let mid = args["modelId"] as? String, !mid.isEmpty {
-      currentModelId = mid
+    if let args = arguments as? [String: Any] {
+      applyCameraArguments(args)
     }
     startCameraSession()
     return nil
@@ -188,6 +196,7 @@ extension EmotionDetectionPlugin: FlutterStreamHandler, AVCaptureVideoDataOutput
       // Detect/crop face
       let faceRect = detectFace(in: img) ?? centerSquare(in: img)
       guard let crop = img.cropping(to: faceRect) else { return }
+      debugDumpFaceCrop(sourceImage: img, crop: crop, rect: faceRect, source: "camera")
       let runtimeModel = try ModelCache.shared.model(for: currentModelId)
       let map = try predictDistribution(runtimeModel: runtimeModel, crop: crop)
       if !map.isEmpty { emitCameraEvent(map) }
@@ -374,6 +383,7 @@ extension EmotionDetectionPlugin {
       guard let crop = cgImage.cropping(to: faceRect) else {
         return result(FlutterError(code: "crop_error", message: "failed to crop face", details: nil))
       }
+      debugDumpFaceCrop(sourceImage: cgImage, crop: crop, rect: faceRect, source: "predict")
 
       let runtimeModel = try ModelCache.shared.model(for: modelId)
       let map = try predictDistribution(runtimeModel: runtimeModel, crop: crop)
@@ -455,21 +465,25 @@ extension EmotionDetectionPlugin {
       let x = r.origin.x * w
       let y = (1.0 - r.origin.y - r.size.height) * h
       var rect = CGRect(x: x, y: y, width: r.size.width * w, height: r.size.height * h)
-      // Expand to square around center
-      rect = square(rect: rect, maxSize: CGSize(width: w, height: h))
+      // Include a little context around the detected face before resizing.
+      rect = paddedSquare(rect: rect, maxSize: CGSize(width: w, height: h), scale: 1.25)
       return rect.integral
     } catch {
       return nil
     }
   }
 
-  private func square(rect: CGRect, maxSize: CGSize) -> CGRect {
-    let side = max(rect.width, rect.height)
-    var cx = rect.midX
-    var cy = rect.midY
-    var sq = CGRect(x: cx - side/2, y: cy - side/2, width: side, height: side)
-    if sq.minX < 0 { cx += -sq.minX; sq.origin.x = 0 }
-    if sq.minY < 0 { cy += -sq.minY; sq.origin.y = 0 }
+  private func paddedSquare(rect: CGRect, maxSize: CGSize, scale: CGFloat) -> CGRect {
+    let unclampedSide = max(rect.width, rect.height) * max(1.0, scale)
+    let side = min(unclampedSide, min(maxSize.width, maxSize.height))
+    var sq = CGRect(
+      x: rect.midX - side / 2,
+      y: rect.midY - side / 2,
+      width: side,
+      height: side
+    )
+    if sq.minX < 0 { sq.origin.x = 0 }
+    if sq.minY < 0 { sq.origin.y = 0 }
     if sq.maxX > maxSize.width { sq.origin.x = maxSize.width - sq.width }
     if sq.maxY > maxSize.height { sq.origin.y = maxSize.height - sq.height }
     return sq
@@ -480,6 +494,56 @@ extension EmotionDetectionPlugin {
     let h = CGFloat(image.height)
     let side = min(w, h)
     return CGRect(x: (w - side)/2, y: (h - side)/2, width: side, height: side)
+  }
+
+  private func debugDumpFaceCrop(sourceImage: CGImage, crop: CGImage, rect: CGRect, source: String) {
+    let env = ProcessInfo.processInfo.environment
+    let enabled = debugFaceCrop
+      || env["EMOTION_DEBUG_FACE_CROP"] == "1"
+      || UserDefaults.standard.bool(forKey: "EMOTION_DEBUG_FACE_CROP")
+    guard enabled else { return }
+
+    debugCropDumpCount += 1
+    let interval = Int(env["EMOTION_DEBUG_FACE_CROP_INTERVAL"] ?? "") ?? 30
+    let maxDumps = Int(env["EMOTION_DEBUG_FACE_CROP_MAX"] ?? "") ?? 20
+    guard debugCropDumpCount <= maxDumps || debugCropDumpCount % max(1, interval) == 0 else { return }
+
+    let fileName = String(format: "emotion_face_crop_%@_%04d.png", source, debugCropDumpCount)
+    let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+      .appendingPathComponent(fileName)
+    let rep = NSBitmapImageRep(cgImage: crop)
+    guard let png = rep.representation(using: .png, properties: [:]) else { return }
+    do {
+      try png.write(to: url, options: .atomic)
+      NSLog(
+        "EmotionDetectionPlugin face crop debug source=%@ image=%dx%d rect={x=%.1f,y=%.1f,w=%.1f,h=%.1f} crop=%dx%d file=%@",
+        source,
+        sourceImage.width,
+        sourceImage.height,
+        rect.origin.x,
+        rect.origin.y,
+        rect.width,
+        rect.height,
+        crop.width,
+        crop.height,
+        url.path
+      )
+    } catch {
+      NSLog("EmotionDetectionPlugin face crop debug write failed file=%@ error=%@", url.path, String(describing: error))
+    }
+  }
+
+  private func applyCameraArguments(_ args: [String: Any]) {
+    if let mid = args["modelId"] as? String, !mid.isEmpty {
+      currentModelId = mid
+    }
+    if let enabled = args["debugFaceCrop"] as? Bool {
+      debugFaceCrop = enabled
+      if enabled {
+        debugCropDumpCount = 0
+        NSLog("EmotionDetectionPlugin face crop debug enabled via Flutter arguments")
+      }
+    }
   }
 }
 

@@ -25,16 +25,24 @@ class MethodChannelEmotionDetection extends EmotionDetectionPlatform {
   }
 
   @override
-  Stream<Map<String, double>> macCameraStream({String? modelId}) {
+  Stream<Map<String, double>> macCameraStream({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
     return cameraEventChannel.receiveBroadcastStream(<String, dynamic>{
       if (modelId != null) 'modelId': modelId,
+      if (debugFaceCrop) 'debugFaceCrop': true,
     }).map((event) => Map<String, double>.from(event as Map));
   }
 
   @override
-  Future<void> macShowCameraPreview({String? modelId}) {
+  Future<void> macShowCameraPreview({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
     return methodChannel.invokeMethod<void>('showMacCameraPreview', {
       if (modelId != null) 'modelId': modelId,
+      if (debugFaceCrop) 'debugFaceCrop': true,
     });
   }
 
