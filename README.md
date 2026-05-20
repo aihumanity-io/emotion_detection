@@ -183,6 +183,10 @@ value.
 4. Never persist the shard; keep it in memory per the `encryption_note.md`
    guidance.
 
+The bundled iOS/macOS Core ML default is `aih_exp15_float16`. Its Core ML input
+is `pixel_values` (`Float32`, `[1, 3, 224, 224]`) with RGB ImageNet
+normalization and NCHW layout.
+
 Use `UserCodeChannel.saveUserCode` to persist the 32-byte user code (a.k.a.
 `user32`) into the native keychain once your backend returns it:
 

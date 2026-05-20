@@ -50,6 +50,27 @@ void main() {
     }
   });
 
+  test('exp15 Core ML payload manifest matches packaged payload length', () {
+    const maxEncryptedPayloadBytes = 200 * 1024 * 1024;
+    const root = 'ios/Assets';
+    final manifest = File('$root/aih_exp15_float16.manifest.json');
+    final payload = File('$root/aih_exp15_float16.enc');
+
+    expect(manifest.existsSync(), isTrue, reason: manifest.path);
+    expect(payload.existsSync(), isTrue, reason: payload.path);
+    expect(payload.lengthSync(), lessThanOrEqualTo(maxEncryptedPayloadBytes),
+        reason: payload.path);
+
+    final manifestJson =
+        jsonDecode(manifest.readAsStringSync()) as Map<String, Object?>;
+
+    expect(manifestJson['algo'], 'AES-256-GCM');
+    expect(manifestJson['sourceKind'], 'directory');
+    expect(manifestJson['modelId'], 'aih_exp15_float16');
+    expect(manifestJson['ciphertextLen'], payload.lengthSync());
+    expect(manifestJson['wrap'], isA<Map<String, Object?>>());
+  });
+
   test('encrypted model manifests match packaged payload lengths', () {
     for (final root in ['ios/Assets', 'example/android/app/src/main/assets']) {
       final manifest = File(

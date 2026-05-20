@@ -78,7 +78,8 @@ void stopMacCamera() async { await _sub?.cancel(); _sub = null; }
 Notes
 - Requires `NSCameraUsageDescription` and camera entitlement in sandboxed builds.
 - The stream begins on `listen` and stops when the subscription is canceled.
-- Default model is `aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx` unless overridden.
+- Default iOS/macOS model is `aih_exp15_float16` unless overridden. Android
+  continues to use `aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx`.
 
 ---
 

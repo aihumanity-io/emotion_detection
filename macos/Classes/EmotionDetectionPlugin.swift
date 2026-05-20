@@ -111,13 +111,13 @@ extension EmotionDetectionPlugin: FlutterStreamHandler, AVCaptureVideoDataOutput
     let status = AVCaptureDevice.authorizationStatus(for: .video)
     if status == .notDetermined {
       AVCaptureDevice.requestAccess(for: .video) { granted in
-        DispatchQueue.main.async { if granted { self.configureAndStartSession() } else { self.cameraEventSink?([String: Double]()) } }
+        DispatchQueue.main.async { if granted { self.configureAndStartSession() } else { self.emitCameraEvent([String: Double]()) } }
       }
       return
     } else if status == .authorized {
       configureAndStartSession()
     } else {
-      cameraEventSink?([String: Double]())
+      emitCameraEvent([String: Double]())
     }
   }
 
@@ -171,7 +171,7 @@ extension EmotionDetectionPlugin: FlutterStreamHandler, AVCaptureVideoDataOutput
   }
 
   public func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-    guard cameraEventSink != nil, !isProcessingFrame else { return }
+    guard !isProcessingFrame else { return }
     isProcessingFrame = true
     defer { isProcessingFrame = false }
 
@@ -190,10 +190,20 @@ extension EmotionDetectionPlugin: FlutterStreamHandler, AVCaptureVideoDataOutput
       guard let crop = img.cropping(to: faceRect) else { return }
       let runtimeModel = try ModelCache.shared.model(for: currentModelId)
       let map = try predictDistribution(runtimeModel: runtimeModel, crop: crop)
-      if !map.isEmpty { cameraEventSink?(map) }
+      if !map.isEmpty { emitCameraEvent(map) }
     } catch {
       // Keep full error for root-cause debugging (enum/error codes often hidden in localizedDescription).
       NSLog("EmotionDetectionPlugin capture error: \(String(describing: error))")
+    }
+  }
+
+  private func emitCameraEvent(_ event: Any) {
+    if Thread.isMainThread {
+      cameraEventSink?(event)
+    } else {
+      DispatchQueue.main.async { [weak self] in
+        self?.cameraEventSink?(event)
+      }
     }
   }
 
@@ -374,61 +384,20 @@ extension EmotionDetectionPlugin {
   }
 
   private func predictDistribution(runtimeModel: RuntimeModel, crop: CGImage) throws -> [String: Double] {
+    let start = ProcessInfo.processInfo.systemUptime
+    let backend: String
+    let map: [String: Double]
     switch runtimeModel {
     case .onnx(let model):
-      return try model.predict(faceImage: crop)
+      backend = "onnx"
+      map = try model.predict(faceImage: crop)
     case .coreML(let model):
-      guard let pb = crop.pixelBuffer(width: 224, height: 224, orientation: .up) else {
-        throw NSError(
-          domain: "ModelLoad",
-          code: -31,
-          userInfo: [NSLocalizedDescriptionKey: "could not build pixel buffer"]
-        )
-      }
-
-      let md = model.modelDescription
-      let inputName: String = {
-        for (name, desc) in md.inputDescriptionsByName {
-          if desc.type == .image { return name }
-        }
-        return "input_1"
-      }()
-      let provider = try MLDictionaryFeatureProvider(dictionary: [inputName: MLFeatureValue(pixelBuffer: pb)])
-      let out = try model.prediction(from: provider)
-
-      var map: [String: Double] = [:]
-      for name in out.featureNames {
-        if let fv = out.featureValue(for: name), fv.type == .dictionary {
-          let dict = fv.dictionaryValue
-          for (k, v) in dict {
-            if let ks = k as? String { map[ks] = v.doubleValue }
-          }
-          if !map.isEmpty { break }
-        }
-      }
-      if !map.isEmpty { return map }
-
-      let maNames = ["Identity", "output", "probabilities"]
-      var arr: [Float]? = nil
-      for n in maNames {
-        if let m = out.featureValue(for: n)?.multiArrayValue {
-          arr = m.toFloatArray()
-          break
-        }
-      }
-      if arr == nil {
-        for n in out.featureNames {
-          if let m = out.featureValue(for: n)?.multiArrayValue {
-            arr = m.toFloatArray()
-            break
-          }
-        }
-      }
-      guard let scores = arr else { return [:] }
-      let labels = ["Anger", "Disgust", "Fear", "Happiness", "Neutral", "Sadness", "Surprise"]
-      for i in 0..<min(scores.count, labels.count) { map[labels[i]] = Double(scores[i]) }
-      return map
+      backend = "coreml"
+      map = try CoreMLImageNetEmotionModel.predict(model: model, faceImage: crop)
     }
+    let elapsedMs = (ProcessInfo.processInfo.systemUptime - start) * 1000.0
+    NSLog("EmotionDetectionPlugin prediction timing backend=\(backend) totalMs=\(String(format: "%.2f", elapsedMs)) outputs=\(map.count)")
+    return map
   }
 
   private func makeCGImage(from inputs: [String: Any]) throws -> CGImage? {
@@ -596,12 +565,14 @@ final class ModelCache {
       }
     }
 
+    addCandidate("aih_exp15_float16")
     addCandidate("aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx")
 
     for candidate in candidates {
       let hasManifest = (try? FileIO.anyBundleURL(name: candidate, ext: "manifest.json", prefer: bundle)) != nil
       let hasEncryptedModel = (try? FileIO.anyBundleURL(name: candidate, ext: "enc", prefer: bundle)) != nil
       if hasManifest && hasEncryptedModel { return candidate }
+      NSLog("EmotionDetectionPlugin candidate unavailable modelId=\(modelId) candidate=\(candidate) manifest=\(hasManifest) enc=\(hasEncryptedModel)")
     }
 
     NSLog("EmotionDetectionPlugin model assets missing for modelId=\(modelId), candidates=\(candidates)")
@@ -1184,8 +1155,39 @@ struct FileIO {
         }
       }
     }
+    if let u = developmentAssetURL(name: name, ext: ext) { return u }
     throw FileErr.missing
   }
+
+  private static func developmentAssetURL(name: String, ext: String) -> URL? {
+    let file = ext.isEmpty ? name : "\(name).\(ext)"
+    let env = ProcessInfo.processInfo.environment
+    let bases = [
+      FileManager.default.currentDirectoryPath,
+      env["PWD"],
+      Bundle.main.bundleURL.deletingLastPathComponent().path
+    ].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    for base in bases {
+      var dir = URL(fileURLWithPath: base, isDirectory: true)
+      for _ in 0..<10 {
+        let direct = dir.appendingPathComponent(file)
+        if FileManager.default.fileExists(atPath: direct.path) { return direct }
+
+        let asset = dir
+          .appendingPathComponent("ios", isDirectory: true)
+          .appendingPathComponent("Assets", isDirectory: true)
+          .appendingPathComponent(file)
+        if FileManager.default.fileExists(atPath: asset.path) { return asset }
+
+        let parent = dir.deletingLastPathComponent()
+        if parent.path == dir.path { break }
+        dir = parent
+      }
+    }
+    return nil
+  }
+
   static func unzip(_ zipURL: URL, to dest: URL) throws {
     let fm = FileManager.default
     try fm.createDirectory(at: dest, withIntermediateDirectories: true)

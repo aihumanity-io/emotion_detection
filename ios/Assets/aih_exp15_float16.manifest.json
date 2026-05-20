@@ -1,0 +1,17 @@
+{
+  "aad" : "com.creataai.emotionsdk/shared|model:aih_exp15_float16",
+  "algo" : "AES-256-GCM",
+  "ciphertextLen" : 158292845,
+  "distributionMode" : "per-developer",
+  "gcmIv" : "ZjD7k04koJUWret3",
+  "modelId" : "aih_exp15_float16",
+  "plainSha256" : "Yiq5dIa-EFJkodnYdw4Nx20zZ9ZoTIPJpt7K3pqs-Ew",
+  "sourceKind" : "directory",
+  "version" : 1,
+  "wrap" : {
+    "iv" : "9Bm7JiTSWUz2RiMI",
+    "salt" : "uU5T0y4SpG-erj7ZvxRps4-cStLjQ1QzkNZMVoKgzeI",
+    "type" : "HKDF-SHA256+code+user+model"
+  },
+  "wrappedCek" : "qGeAqOphZcaDKJW3SK9fu7l1JptklU3OMyO1aAPSYbxf3bswkkgMEoiHfzLPinnx"
+}

@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import CoreML
 import CoreImage
+import CryptoKit
 import MobileCoreServices
 
 @available(iOS 15.0, *)
@@ -57,25 +58,43 @@ enum UserCodeUtils {
         return base
     }
 
-    static func loadUser32(userName: String, modelId: String?) throws -> Data {
-        let acct = account(userName: userName, modelId: modelId)
-        if let cached = try? User32Store.load(account: acct) {
-            print("User32: loadUser32 hit keychain for \(acct) bytes=\(cached.count)")
-            return cached
+    static func loadUser32(userName: String, modelIds: [String]) throws -> Data {
+        var accountsToTry = [String]()
+        for modelId in modelIds {
+            let acct = account(userName: userName, modelId: modelId)
+            if !accountsToTry.contains(acct) { accountsToTry.append(acct) }
+        }
+        let legacy = account(userName: userName, modelId: nil)
+        if !accountsToTry.contains(legacy) { accountsToTry.append(legacy) }
+
+        for acct in accountsToTry {
+            if let cached = try? User32Store.load(account: acct) {
+                print("User32: loadUser32 hit keychain for \(acct) bytes=\(cached.count)")
+                return cached
+            }
         }
         let side = try User32SideLoad.loadUser32Data(bundle: .main)
         print("User32: loadUser32 fell back to sideload bytes=\(side.count)")
         return side
     }
+
+    static func loadUser32(userName: String, modelId: String?) throws -> Data {
+        let ids = modelId == nil ? [] : [modelId!]
+        return try loadUser32(userName: userName, modelIds: ids)
+    }
 }
 
 @available(iOS 15.0, *)
 private extension EmotionDetectionPlugin {
+    static let exp15ModelId = "aih_exp15_float16"
+    static let defaultModelId = exp15ModelId
+
     static func resetModels() {
         onnxEmotionModel = nil
+        exp15CoreMLModel = nil
     }
 
-    func ensureModelsReady() throws {
+    func ensureOnnxModelReady() throws {
         if EmotionDetectionPlugin.onnxEmotionModel == nil {
             do {
                 EmotionDetectionPlugin.onnxEmotionModel = try OnnxEmotionModel(userName: EmotionDetectionPlugin.currentUserName)
@@ -89,12 +108,56 @@ private extension EmotionDetectionPlugin {
             throw MLError.Error("No ONNX model could be loaded.")
         }
     }
+
+    func ensureExp15ModelReady() throws -> MLModel {
+        if let model = EmotionDetectionPlugin.exp15CoreMLModel {
+            return model
+        }
+
+        let userName = UserCodeUtils.sanitize(userName: EmotionDetectionPlugin.currentUserName)
+        let bundle = Bundle(for: EmotionDetectionPlugin.self)
+        let baseName = EmotionDetectionPlugin.exp15ModelId
+        let manifestURL = try FileIO.bundleURL(name: baseName, ext: "manifest.json", in: bundle)
+        let manifestData = try Data(contentsOf: manifestURL)
+        let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
+        let modelId = manifest.resolvedModelId.isEmpty ? baseName : manifest.resolvedModelId
+        let identifiers = [
+            modelId,
+            manifest.modelId,
+            manifest.model_id,
+            manifest.model_name,
+            baseName
+        ]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        print("Manifest \(baseName): id=\(modelId) shard_required=\(manifest.shard_required ?? false)")
+
+        let cekData = try obtainCEK_UserCodeGateSync(
+            manifest: manifest,
+            userName: userName,
+            modelId: modelId,
+            user32Provider: { try UserCodeUtils.loadUser32(userName: userName, modelIds: identifiers) }
+        )
+        let modelConfig = MLModelConfiguration()
+        modelConfig.computeUnits = .cpuAndGPU
+        let model = try EncryptedModelLoader.loadFromBundle(
+            baseName: baseName,
+            configuration: modelConfig,
+            framework: bundle
+        ) {
+            SymmetricKey(data: cekData)
+        }
+        EmotionDetectionPlugin.exp15CoreMLModel = model
+        print("Core ML model \(baseName) loaded")
+        return model
+    }
 }
 
 @available(iOS 15.0, *)
 public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
     var image_count = 0
     static private var onnxEmotionModel: OnnxEmotionModel?
+    static private var exp15CoreMLModel: MLModel?
     static private var currentUserName: String = UserCodeUtils.sanitize(userName: "dev@tartalabs.io")
 
 
@@ -131,6 +194,13 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         case "clearModelLicense":
             handleClearModelLicense(call: call, result: result)
 
+        case "warmUp":
+            handleWarmUp(call: call, result: result)
+
+        case "unload":
+            EmotionDetectionPlugin.resetModels()
+            result(nil)
+
             
         default:
             result(FlutterMethodNotImplemented)
@@ -138,12 +208,6 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
     }
 
     func faceEmotionDetection(result: @escaping FlutterResult, call: FlutterMethodCall) {
-        do {
-            try ensureModelsReady()
-        } catch {
-            result(FlutterError(code: "model_load_error", message: error.localizedDescription, details: nil))
-            return
-        }
         do {
                 guard let arguments = call.arguments as? [String:Any],
                 let data:FlutterStandardTypedData = arguments["image"] as? FlutterStandardTypedData else {
@@ -157,6 +221,8 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
                 let top = arguments["top"] as? Int ?? 0
               let boxwidth = arguments["boxwidth"] as? Int ?? 0
               let boxheight = arguments["boxheight"] as? Int ?? 0
+              let modelId = (arguments["modelId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                  ?? EmotionDetectionPlugin.defaultModelId
 
 
                 #if os(iOS)
@@ -176,6 +242,15 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
                                         return result("None")
                                     }
 
+                                    if modelId == EmotionDetectionPlugin.exp15ModelId {
+                                        let model = try ensureExp15ModelReady()
+                                        let startT = Date().timeIntervalSince1970
+                                        let retFromModel = try CoreMLImageNetEmotionModel.predict(model: model, faceImage: faceImage)
+                                        print("Core ML Model time: \((Date().timeIntervalSince1970 - startT)*1000) ms")
+                                        return result(retFromModel)
+                                    }
+
+                                    try ensureOnnxModelReady()
                                     guard let onnxModel = EmotionDetectionPlugin.onnxEmotionModel else {
                                         throw MLError.Error("ONNX model is not loaded.")
                                     }
@@ -323,6 +398,22 @@ public class EmotionDetectionPlugin: NSObject, FlutterPlugin {
         LicenseCache.clear(modelId: modelId)
         EmotionDetectionPlugin.resetModels()
         result(nil)
+    }
+
+    private func handleWarmUp(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as? [String: Any]
+        let modelId = (args?["modelId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? EmotionDetectionPlugin.defaultModelId
+        do {
+            if modelId == EmotionDetectionPlugin.exp15ModelId {
+                _ = try ensureExp15ModelReady()
+            } else {
+                try ensureOnnxModelReady()
+            }
+            result(true)
+        } catch {
+            result(FlutterError(code: "model_load_error", message: error.localizedDescription, details: nil))
+        }
     }
 
 

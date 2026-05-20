@@ -27,7 +27,9 @@ A new Flutter plugin project.
 
    s.resources        = [
      'Assets/aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx.enc',
-     'Assets/aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx.manifest.json'
+     'Assets/aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx.manifest.json',
+     'Assets/aih_exp15_float16.enc',
+     'Assets/aih_exp15_float16.manifest.json'
    ]
 
   # If your plugin requires a privacy manifest, for example if it uses any

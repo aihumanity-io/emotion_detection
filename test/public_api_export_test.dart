@@ -26,7 +26,9 @@ void main() {
     expect(WebHostedInferenceException, isA<Type>());
     expect(WebSmokeReport, isA<Type>());
     expect(WebSmokeReportException, isA<Type>());
+    expect(exp15EmotionModelKey, 'aih_exp15_float16');
     expect(defaultEmotionModelKey, isNotEmpty);
+    expect(defaultOnnxEmotionModelKey, contains('_onnx'));
     expect(defaultEmotionModelKeys, isNotEmpty);
     expect(defaultAndroidEmotionModelKeys, isNotEmpty);
     expect(widget.controller, same(controller));

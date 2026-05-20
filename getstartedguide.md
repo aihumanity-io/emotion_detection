@@ -110,7 +110,7 @@ On macOS, running from `example/` can also read the local `env` file at runtime.
 Optional model/platform overrides:
 
 ```dotenv
-EXAMPLE_MODEL_KEY=aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx
+EXAMPLE_MODEL_KEY=aih_exp15_float16
 EXAMPLE_MODEL_AAD_IOS=com.creataai.emotionsdk/ios
 EXAMPLE_MODEL_AAD_MACOS=com.creataai.emotionsdk/ios
 EXAMPLE_MODEL_AAD_ANDROID=com.creataai.emotionsdk/android
