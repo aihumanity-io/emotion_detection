@@ -47,6 +47,7 @@ const String _exampleModelAadAndroidFromDefine = String.fromEnvironment(
 );
 
 Map<String, String> _localEnvFile = <String, String>{};
+String _localEnvStatus = 'not loaded';
 
 Map<String, String> _parseEnvContents(String input) {
   final result = <String, String>{};
@@ -93,7 +94,16 @@ Future<void> _loadLocalEnvFileIfPresent() async {
 
   try {
     final file = await findEnvFile();
-    if (file == null) return;
+    if (file == null) {
+      _localEnvStatus = 'not found';
+      if (kDebugMode) {
+        debugPrint(
+          'No local env file found (expected one of: env, .env, example/env, example/.env, ../env, ../.env, ...). '
+          'cwd: ${Directory.current.path}',
+        );
+      }
+      return;
+    }
     final contents = await file.readAsString();
     _localEnvFile = _parseEnvContents(contents);
     if (kDebugMode) {
@@ -101,7 +111,9 @@ Future<void> _loadLocalEnvFileIfPresent() async {
         'Loaded local env file: ${file.path} (keys: ${_localEnvFile.keys.length}, cwd: ${Directory.current.path})',
       );
     }
+    _localEnvStatus = 'loaded: ${file.path}';
   } catch (_) {
+    _localEnvStatus = 'load error';
     // ignore
   }
 }
@@ -112,6 +124,26 @@ Map<String, String> _safeDotenvEnv() {
   } catch (_) {
     return _localEnvFile;
   }
+}
+
+void _debugPrintEnvDiagnostics(
+  Map<String, String> env,
+  Map<String, String> procEnv,
+) {
+  if (!kDebugMode) return;
+
+  bool hasDefine(String v) => v.trim().isNotEmpty;
+  bool hasEnv(String k) => (env[k] ?? '').trim().isNotEmpty;
+  bool hasProc(String k) => (procEnv[k] ?? '').trim().isNotEmpty;
+
+  debugPrint(
+    'Env diagnostics: '
+    'platform=${defaultTargetPlatform.name}, '
+    'cwd=${Directory.current.path}, '
+    'localEnv=$_localEnvStatus, '
+    'SDK_KEY_ID{define=${hasDefine(_sdkKeyIdFromDefine)}, env=${hasEnv('SDK_KEY_ID')}, proc=${hasProc('SDK_KEY_ID')}}, '
+    'SDK_KEY_SECRET{define=${hasDefine(_sdkKeySecretFromDefine)}, env=${hasEnv('SDK_KEY_SECRET')}, proc=${hasProc('SDK_KEY_SECRET')}}',
+  );
 }
 
 String _pickValue(
@@ -202,6 +234,7 @@ class _MyAppState extends State<MyApp> {
     // Initialize secrets module from .env or process env if present
     final env = _safeDotenvEnv();
     final procEnv = Platform.environment;
+    _debugPrintEnvDiagnostics(env, procEnv);
 
     final apiKeyId = _pickValue(
       _sdkKeyIdFromDefine,
