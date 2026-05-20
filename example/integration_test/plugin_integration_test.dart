@@ -11,6 +11,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:io' show Platform;
+import 'dart:io' show File;
 
 import 'package:emotion_detection/emotion_detection.dart';
 
@@ -48,6 +49,47 @@ String _pickValue(
   if (dotenvValue.isNotEmpty) return dotenvValue;
 
   return (Platform.environment[key] ?? '').trim();
+}
+
+Future<Map<String, String>> _readEnvFileIfPresent(String path) async {
+  try {
+    final file = File(path);
+    if (!await file.exists()) return <String, String>{};
+    final contents = await file.readAsString();
+    final result = <String, String>{};
+    for (final rawLine in contents.split('\n')) {
+      final line = rawLine.trim();
+      if (line.isEmpty) continue;
+      if (line.startsWith('#')) continue;
+      final idx = line.indexOf('=');
+      if (idx <= 0) continue;
+      final key = line.substring(0, idx).trim();
+      final value = line.substring(idx + 1).trim();
+      if (key.isEmpty) continue;
+      result[key] = value;
+    }
+    return result;
+  } catch (_) {
+    return <String, String>{};
+  }
+}
+
+Future<Map<String, String>> _readLocalEnvFileIfPresent() async {
+  final candidates = <String>[
+    'env',
+    '.env',
+    'example/env',
+    'example/.env',
+    '../env',
+    '../.env',
+    '../../env',
+    '../../.env',
+  ];
+  for (final path in candidates) {
+    final out = await _readEnvFileIfPresent(path);
+    if (out.isNotEmpty) return out;
+  }
+  return <String, String>{};
 }
 
 final List<int> _tinyPngBytes = <int>[
@@ -141,12 +183,16 @@ void main() {
       return;
     }
 
-    Map<String, String> dotenvEnv = <String, String>{};
-    try {
-      await dotenv.load(fileName: 'env');
-      dotenvEnv = dotenv.env;
-    } catch (_) {
-      dotenvEnv = <String, String>{};
+    // Prefer a plain `env` file next to the example app when running locally.
+    // Fall back to flutter_dotenv assets (rare for integration tests).
+    Map<String, String> dotenvEnv = await _readLocalEnvFileIfPresent();
+    if (dotenvEnv.isEmpty) {
+      try {
+        await dotenv.load(fileName: 'env');
+        dotenvEnv = dotenv.env;
+      } catch (_) {
+        dotenvEnv = <String, String>{};
+      }
     }
 
     final preferredModelKey =

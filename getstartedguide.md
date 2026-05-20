@@ -97,8 +97,15 @@ Missing SDK_KEY_ID/SDK_KEY_SECRET.
 Provide via env file, environment, or --dart-define.
 ```
 
-means `example/.env` is missing, empty, not rebuilt into the app, or the
-app was not fully restarted after changing the file.
+means credentials were not provided to the running app. On iOS/Android you
+typically want build-time injection:
+
+```bash
+cd example
+flutter run --dart-define-from-file=env
+```
+
+On macOS, running from `example/` can also read the local `env` file at runtime.
 
 Optional model/platform overrides:
 
@@ -110,8 +117,8 @@ EXAMPLE_MODEL_AAD_ANDROID=com.creataai.emotionsdk/android
 ```
 
 The example app currently reads `example/env` and process environment values.
-Use `env` for iOS. Shell environment variables may work for `flutter run -d
-macos`, but are not the recommended path for device builds.
+For iOS/Android, prefer `--dart-define-from-file=env` (or explicit `--dart-define`)
+so secrets are compiled into the app for that run.
 
 ## 5. Install Dependencies
 

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:camera/camera.dart';
 import 'package:emotion_detection/emotion_detection.dart';
@@ -46,11 +46,71 @@ const String _exampleModelAadAndroidFromDefine = String.fromEnvironment(
   defaultValue: '',
 );
 
+Map<String, String> _localEnvFile = <String, String>{};
+
+Map<String, String> _parseEnvContents(String input) {
+  final result = <String, String>{};
+  for (final rawLine in input.split('\n')) {
+    final line = rawLine.trim();
+    if (line.isEmpty) continue;
+    if (line.startsWith('#')) continue;
+    final idx = line.indexOf('=');
+    if (idx <= 0) continue;
+    final key = line.substring(0, idx).trim();
+    final value = line.substring(idx + 1).trim();
+    if (key.isEmpty) continue;
+    result[key] = value;
+  }
+  return result;
+}
+
+Future<void> _loadLocalEnvFileIfPresent() async {
+  Future<File?> findEnvFile() async {
+    final candidates = <String>[
+      // Expected: running from `example/`.
+      'env',
+      // Back-compat / local preference.
+      '.env',
+      // Running from repo root.
+      'example/env',
+      'example/.env',
+      // Running from platform folders (Xcode, etc).
+      '../env',
+      '../.env',
+      '../../env',
+      '../../.env',
+    ];
+    for (final path in candidates) {
+      try {
+        final file = File(path);
+        if (await file.exists()) return file;
+      } catch (_) {
+        // ignore
+      }
+    }
+    return null;
+  }
+
+  try {
+    final file = await findEnvFile();
+    if (file == null) return;
+    final contents = await file.readAsString();
+    _localEnvFile = _parseEnvContents(contents);
+    if (kDebugMode) {
+      debugPrint(
+        'Loaded local env file: ${file.path} (keys: ${_localEnvFile.keys.length}, cwd: ${Directory.current.path})',
+      );
+    }
+  } catch (_) {
+    // ignore
+  }
+}
+
 Map<String, String> _safeDotenvEnv() {
   try {
     return dotenv.env;
   } catch (_) {
-    return <String, String>{};
+    return _localEnvFile;
   }
 }
 
@@ -80,9 +140,10 @@ String _firstNonEmpty(List<String> values) {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Load optional env file for local SDK keys (external-volume friendly).
-  try {
-    await dotenv.load(fileName: 'env');
-  } catch (_) {}
+  //
+  // `flutter_dotenv` loads from Flutter assets (rootBundle), not filesystem.
+  // For local development, read a plain `env` file from the working directory.
+  await _loadLocalEnvFileIfPresent();
   // Guard camera warm-up on desktop/web to avoid MissingPluginException.
   if (Platform.isAndroid || Platform.isIOS) {
     try {
@@ -315,7 +376,7 @@ class _MyAppState extends State<MyApp> {
     if (!_provisioner.hasRequiredConfig) {
       setState(() {
         _cekSecretStatus =
-            'Missing SDK_KEY_ID/SDK_KEY_SECRET. Provide via env file, environment, or --dart-define.';
+            'Missing SDK_KEY_ID/SDK_KEY_SECRET. Provide via `flutter run --dart-define-from-file=env` or `--dart-define`.';
       });
       return;
     }

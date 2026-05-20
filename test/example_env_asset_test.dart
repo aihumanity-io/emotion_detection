@@ -16,8 +16,8 @@ void main() {
     test('keeps optional dotenv load guarded in the example app', () {
       final main = File('example/lib/main.dart').readAsStringSync();
 
-      expect(main, contains("dotenv.load(fileName: 'env')"));
-      expect(main, contains('catch (_)'));
+      expect(main, contains("_loadLocalEnvFileIfPresent()"));
+      expect(main, contains("'example/env'"));
     });
   });
 }
