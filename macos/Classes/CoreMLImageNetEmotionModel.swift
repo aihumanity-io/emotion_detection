@@ -127,7 +127,7 @@ enum CoreMLImageNetEmotionModel {
                             map[label] = value.doubleValue
                         }
                     }
-                    if !map.isEmpty { return map }
+                    if !map.isEmpty { return normalizeIfNeeded(map) }
                 }
                 if let multiArray = output.featureValue(for: name)?.multiArrayValue {
                     scores = toFloatArray(multiArray)
@@ -137,10 +137,38 @@ enum CoreMLImageNetEmotionModel {
         }
         guard let scores else { throw CoreMLImageNetEmotionError.unsupportedOutput }
         var map: [String: Double] = [:]
+        let probabilities = normalizeIfNeeded(scores)
         for i in 0..<min(scores.count, labels.count) {
-            map[labels[i]] = Double(scores[i])
+            map[labels[i]] = Double(probabilities[i])
         }
         return map
+    }
+
+    private static func normalizeIfNeeded(_ map: [String: Double]) -> [String: Double] {
+        let keys = Array(map.keys)
+        let values = keys.map { Float(map[$0] ?? 0) }
+        let normalized = normalizeIfNeeded(values)
+        var result: [String: Double] = [:]
+        for i in keys.indices {
+            result[keys[i]] = Double(normalized[i])
+        }
+        return result
+    }
+
+    private static func normalizeIfNeeded(_ values: [Float]) -> [Float] {
+        guard !values.isEmpty else { return values }
+        let sum = values.reduce(Float(0), +)
+        let looksLikeProbabilities = values.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 1 }
+            && abs(sum - 1.0) <= 0.02
+        if looksLikeProbabilities {
+            return values
+        }
+
+        let maxValue = values.max() ?? 0
+        let exps = values.map { exp($0 - maxValue) }
+        let expSum = exps.reduce(Float(0), +)
+        guard expSum.isFinite, expSum > 0 else { return values }
+        return exps.map { $0 / expSum }
     }
 
     private static func toFloatArray(_ multiArray: MLMultiArray) -> [Float] {

@@ -32,6 +32,7 @@ void main() {
     expect(source, contains('(0.485, 0.456, 0.406)'));
     expect(source, contains('(0.229, 0.224, 0.225)'));
     expect(source, contains('ptr[channelSize + base] = g'));
+    expect(source, contains('normalizeIfNeeded'));
     expect(source, contains('inferenceMs=%.2f'));
   });
 
