@@ -9,6 +9,74 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+const String _sdkKeyIdFromDefine = String.fromEnvironment(
+  'SDK_KEY_ID',
+  defaultValue: '',
+);
+const String _sdkKeySecretFromDefine = String.fromEnvironment(
+  'SDK_KEY_SECRET',
+  defaultValue: '',
+);
+const String _exampleUserNameFromDefine = String.fromEnvironment(
+  'EXAMPLE_USER_NAME',
+  defaultValue: '',
+);
+const String _exampleServerBaseUrlFromDefine = String.fromEnvironment(
+  'EXAMPLE_SERVER_BASE_URL',
+  defaultValue: '',
+);
+const String _exampleModelKeyFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_KEY',
+  defaultValue: '',
+);
+const String _exampleModelAadFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD',
+  defaultValue: '',
+);
+const String _exampleModelAadIosFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD_IOS',
+  defaultValue: '',
+);
+const String _exampleModelAadMacosFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD_MACOS',
+  defaultValue: '',
+);
+const String _exampleModelAadAndroidFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD_ANDROID',
+  defaultValue: '',
+);
+
+Map<String, String> _safeDotenvEnv() {
+  try {
+    return dotenv.env;
+  } catch (_) {
+    return <String, String>{};
+  }
+}
+
+String _pickValue(
+  String fromDefine,
+  Map<String, String> dotenvEnv,
+  Map<String, String> procEnv,
+  String key,
+) {
+  final defineValue = fromDefine.trim();
+  if (defineValue.isNotEmpty) return defineValue;
+
+  final dotenvValue = (dotenvEnv[key] ?? '').trim();
+  if (dotenvValue.isNotEmpty) return dotenvValue;
+
+  return (procEnv[key] ?? '').trim();
+}
+
+String _firstNonEmpty(List<String> values) {
+  for (final v in values) {
+    final trimmed = v.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+  }
+  return '';
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Load optional .env for local SDK keys (macOS/desktop-friendly)
@@ -71,35 +139,62 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     // Initialize secrets module from .env or process env if present
-    final env = dotenv.env;
+    final env = _safeDotenvEnv();
     final procEnv = Platform.environment;
-    final apiKeyId = (env['SDK_KEY_ID'] ?? procEnv['SDK_KEY_ID'] ?? '').trim();
-    final apiKeySecret =
-        (env['SDK_KEY_SECRET'] ?? procEnv['SDK_KEY_SECRET'] ?? '').trim();
-    final baseUrl = (env['EXAMPLE_SERVER_BASE_URL'] ??
-            procEnv['EXAMPLE_SERVER_BASE_URL'] ??
-            '')
-        .trim();
-    final userName =
-        (env['EXAMPLE_USER_NAME'] ?? procEnv['EXAMPLE_USER_NAME'] ?? '').trim();
-    final modelKey =
-        (env['EXAMPLE_MODEL_KEY'] ?? procEnv['EXAMPLE_MODEL_KEY'] ?? '').trim();
-    final aadIOS = (env['EXAMPLE_MODEL_AAD_IOS'] ??
-            procEnv['EXAMPLE_MODEL_AAD_IOS'] ??
-            env['EXAMPLE_MODEL_AAD'] ??
-            procEnv['EXAMPLE_MODEL_AAD'] ??
-            '')
-        .trim();
-    final aad =
-        (env['EXAMPLE_MODEL_AAD'] ?? procEnv['EXAMPLE_MODEL_AAD'] ?? '').trim();
-    final aadAndroid = (env['EXAMPLE_MODEL_AAD_ANDROID'] ??
-            procEnv['EXAMPLE_MODEL_AAD_ANDROID'] ??
-            '')
-        .trim();
-    final aadMacOS = (env['EXAMPLE_MODEL_AAD_MACOS'] ??
-            procEnv['EXAMPLE_MODEL_AAD_MACOS'] ??
-            '')
-        .trim();
+
+    final apiKeyId = _pickValue(
+      _sdkKeyIdFromDefine,
+      env,
+      procEnv,
+      'SDK_KEY_ID',
+    );
+    final apiKeySecret = _pickValue(
+      _sdkKeySecretFromDefine,
+      env,
+      procEnv,
+      'SDK_KEY_SECRET',
+    );
+    final baseUrl = _pickValue(
+      _exampleServerBaseUrlFromDefine,
+      env,
+      procEnv,
+      'EXAMPLE_SERVER_BASE_URL',
+    );
+    final userName = _pickValue(
+      _exampleUserNameFromDefine,
+      env,
+      procEnv,
+      'EXAMPLE_USER_NAME',
+    );
+    final modelKey = _pickValue(
+      _exampleModelKeyFromDefine,
+      env,
+      procEnv,
+      'EXAMPLE_MODEL_KEY',
+    );
+    final aadIOS = _firstNonEmpty(<String>[
+      _pickValue(
+          _exampleModelAadIosFromDefine, env, procEnv, 'EXAMPLE_MODEL_AAD_IOS'),
+      _pickValue(_exampleModelAadFromDefine, env, procEnv, 'EXAMPLE_MODEL_AAD'),
+    ]);
+    final aad = _pickValue(
+      _exampleModelAadFromDefine,
+      env,
+      procEnv,
+      'EXAMPLE_MODEL_AAD',
+    );
+    final aadAndroid = _pickValue(
+      _exampleModelAadAndroidFromDefine,
+      env,
+      procEnv,
+      'EXAMPLE_MODEL_AAD_ANDROID',
+    );
+    final aadMacOS = _pickValue(
+      _exampleModelAadMacosFromDefine,
+      env,
+      procEnv,
+      'EXAMPLE_MODEL_AAD_MACOS',
+    );
 
     _provisioner = EmotionDetectionProvisioner(
       sdkKeyId: apiKeyId,
