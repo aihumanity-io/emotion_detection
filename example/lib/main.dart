@@ -66,27 +66,46 @@ Map<String, String> _parseEnvContents(String input) {
 }
 
 Future<void> _loadLocalEnvFileIfPresent() async {
-  Future<File?> findEnvFile() async {
+  Future<File?> tryFindFromBase(String baseDir) async {
     final candidates = <String>[
-      // Expected: running from `example/`.
       'env',
-      // Back-compat / local preference.
       '.env',
-      // Running from repo root.
       'example/env',
       'example/.env',
-      // Running from platform folders (Xcode, etc).
       '../env',
       '../.env',
       '../../env',
       '../../.env',
     ];
-    for (final path in candidates) {
+    for (final rel in candidates) {
       try {
-        final file = File(path);
-        if (await file.exists()) return file;
+        final resolved = File('$baseDir/$rel');
+        if (await resolved.exists()) return resolved;
       } catch (_) {
         // ignore
+      }
+    }
+    return null;
+  }
+
+  Future<File?> findEnvFile() async {
+    final bases = <String>{
+      Directory.current.path,
+      if ((Platform.environment['PWD'] ?? '').trim().isNotEmpty)
+        Platform.environment['PWD']!.trim(),
+      File(Platform.resolvedExecutable).parent.path,
+    }.toList();
+
+    for (final base in bases) {
+      // Check base and a few parents. Handles macOS apps where cwd can be `/`
+      // but the build output still lives under `example/build/...`.
+      var dir = Directory(base);
+      for (var i = 0; i < 10; i++) {
+        final found = await tryFindFromBase(dir.path);
+        if (found != null) return found;
+        final parent = dir.parent;
+        if (parent.path == dir.path) break;
+        dir = parent;
       }
     }
     return null;
@@ -98,8 +117,10 @@ Future<void> _loadLocalEnvFileIfPresent() async {
       _localEnvStatus = 'not found';
       if (kDebugMode) {
         debugPrint(
-          'No local env file found (expected one of: env, .env, example/env, example/.env, ../env, ../.env, ...). '
-          'cwd: ${Directory.current.path}',
+          'No local env file found. '
+          'cwd: ${Directory.current.path}, '
+          'PWD: ${Platform.environment['PWD'] ?? ''}, '
+          'resolvedExecutable: ${Platform.resolvedExecutable}',
         );
       }
       return;
