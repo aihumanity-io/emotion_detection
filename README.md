@@ -201,8 +201,19 @@ if (userCode is String && userCode.isNotEmpty) {
 }
 ```
 
-When running the example app, set `EXAMPLE_USER_NAME` via `--dart-define` so the
-UI knows which keychain account to use when saving the user code.
+When running the example app from the command line, provide local SDK
+credentials with `--dart-define-from-file=env` from the `example/` directory:
+
+```bash
+cd example
+flutter run --dart-define-from-file=env
+```
+
+For Xcode Run button workflows on iOS/macOS, add `SDK_KEY_ID`,
+`SDK_KEY_SECRET`, `EXAMPLE_USER_NAME`, `EXAMPLE_SERVER_BASE_URL`, and optional
+`EXAMPLE_MODEL_KEY` as Runner scheme environment variables. The example bridges
+native `ProcessInfo.processInfo.environment` into Dart for this dev workflow.
+Do not bundle `.env` as a Flutter asset for SDK secrets.
 
 ---
 

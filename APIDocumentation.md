@@ -237,6 +237,13 @@ Normal app code should call this initializer before mounting
 `EmotionDetectorView` or running `ModelRuntime.predict`. The lower-level APIs
 below remain available for debugging and custom flows.
 
+For local example-app development, provide `SDK_KEY_ID`, `SDK_KEY_SECRET`, and
+`EXAMPLE_USER_NAME` with `flutter run --dart-define-from-file=env`, explicit
+`--dart-define` values, or iOS/macOS Xcode Runner scheme environment variables.
+The example app bridges native `ProcessInfo.processInfo.environment` into Dart
+so Xcode Run button launches can read scheme variables. Do not bundle `.env` as
+a Flutter asset for SDK secrets.
+
 > Security note: this phase still places `sdkKeySecret` in the client app. Use
 > it for development or controlled deployments. A production hosted path should
 > replace this with a publishable key plus server-side app attestation, or an

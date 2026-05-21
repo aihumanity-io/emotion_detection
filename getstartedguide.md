@@ -97,15 +97,22 @@ Missing SDK_KEY_ID/SDK_KEY_SECRET.
 Provide via env file, environment, or --dart-define.
 ```
 
-means credentials were not provided to the running app. On iOS/Android you
-typically want build-time injection:
+means credentials were not provided to the running app. For command-line runs,
+use build-time injection:
 
 ```bash
 cd example
 flutter run --dart-define-from-file=env
 ```
 
+When using the Xcode Run button for iOS/macOS, add the same keys under
+`Runner scheme > Run > Arguments > Environment Variables`. The example app
+bridges native `ProcessInfo.processInfo.environment` into Dart, so those scheme
+values are available without bundling a `.env` file into the app.
+
 On macOS, running from `example/` can also read the local `env` file at runtime.
+iOS is sandboxed and should use `--dart-define-from-file=env` or Xcode scheme
+environment variables instead of filesystem `.env` lookup.
 
 Optional model/platform overrides:
 
@@ -116,9 +123,15 @@ EXAMPLE_MODEL_AAD_MACOS=com.creataai.emotionsdk/ios
 EXAMPLE_MODEL_AAD_ANDROID=com.creataai.emotionsdk/android
 ```
 
-The example app currently reads `example/env` and process environment values.
-For iOS/Android, prefer `--dart-define-from-file=env` (or explicit `--dart-define`)
-so secrets are compiled into the app for that run.
+The example app checks values in this order:
+
+1. `--dart-define` / `--dart-define-from-file`.
+2. Local `example/env` or `.env` filesystem file when available.
+3. Dart `Platform.environment`.
+4. Native iOS/macOS `ProcessInfo.processInfo.environment` from Xcode schemes.
+
+Do not add `.env` as a Flutter asset for SDK secrets; asset files are bundled
+into the app and can be inspected.
 
 ## 5. Install Dependencies
 
@@ -220,12 +233,16 @@ In Xcode:
 - Select your Apple development team.
 - Make the bundle id unique if Xcode asks.
 
-Then run:
+Then run from the command line:
 
 ```bash
 flutter devices
-flutter run -d <ios-device-id>
+flutter run -d <ios-device-id> --dart-define-from-file=env
 ```
+
+For Xcode Run, set the `SDK_KEY_ID`, `SDK_KEY_SECRET`, `EXAMPLE_USER_NAME`,
+`EXAMPLE_SERVER_BASE_URL`, and optional `EXAMPLE_MODEL_KEY` scheme environment
+variables before launching.
 
 On first launch, accept camera permission.
 
@@ -265,18 +282,18 @@ The encrypted model assets and decryption method are unchanged.
 
 ### Missing SDK keys
 
-Fix `example/env`, then fully rebuild:
+Fix `example/env` or the Xcode scheme environment variables, then fully rebuild:
 
 ```bash
 flutter clean
 flutter pub get
-flutter run -d macos
+flutter run -d macos --dart-define-from-file=env
 ```
 
 For iOS, rerun with your iOS device id:
 
 ```bash
-flutter run -d <ios-device-id>
+flutter run -d <ios-device-id> --dart-define-from-file=env
 ```
 
 ### AppleDouble `._*` files
