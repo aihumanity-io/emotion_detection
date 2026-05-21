@@ -1,5 +1,6 @@
 name: emotion_detection_example
 description: "Demonstrates how to use the emotion_detection plugin."
+version: 0.2.0+1
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -38,6 +39,7 @@ dev_dependencies:
     sdk: flutter
   flutter_test:
     sdk: flutter
+  plugin_platform_interface: ^2.0.2
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -56,8 +58,6 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-  assets:
-    - .env
 
   # To add assets to your application, add an assets section, like this:
   # assets:

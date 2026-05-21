@@ -1,20 +1,20 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
+import 'package:emotion_detection/emotion_detection_platform_interface.dart';
 import 'package:emotion_detection/native/model_runtime.dart';
 import 'package:face_camera/face_camera.dart';
 //import 'package:face_expression_package/src/AIHException.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart';
 import 'package:image/image.dart' as imagelib;
-import 'dart:io';
 
 import '../utility/utility.dart';
 
 /// The [EmotionDetectionController] holds all the logic of a face expression detection plugin, developed by AIHP
 class EmotionDetectionController {
   static const _methodChannelName = "face_emotion_detection";
-  static const MethodChannel _methodChannel = MethodChannel(_methodChannelName);
   static ModelRuntime modelLoader = ModelRuntime(_methodChannelName);
 
   Rect? faceRect;
@@ -127,33 +127,27 @@ class EmotionDetectionController {
         debugPrint("landmark length: ${landmarks.length}");
 
         if (Platform.isIOS) {
-          final dataMap = await _methodChannel.invokeMethod<dynamic>(
-            'faceEmotion',
-            {
-              'image': image.bytes,
-              'width': imageMeta.size.width,
-              'height': imageMeta.size.height,
-              'left': faceRect!.left.toInt(),
-              'top': faceRect!.top.toInt(),
-              'boxwidth': faceRect!.width.toInt(),
-              'boxheight': faceRect!.height.toInt(),
-              'landmarks': landmarks
-            },
-          );
+          final dataMap = await EmotionDetectionPlatform.instance.faceEmotion({
+            'image': image.bytes,
+            'width': imageMeta.size.width,
+            'height': imageMeta.size.height,
+            'left': faceRect!.left.toInt(),
+            'top': faceRect!.top.toInt(),
+            'boxwidth': faceRect!.width.toInt(),
+            'boxheight': faceRect!.height.toInt(),
+            'landmarks': landmarks
+          });
           return dataMap;
         } else {
-          final dataMap = await _methodChannel.invokeMethod<dynamic>(
-            'faceEmotion',
-            {
-              'faceImageData': imagelib.encodePng(faceImage!),
-              'width': width,
-              'height': height,
-              'left': faceRect!.left.toInt(),
-              'top': faceRect!.top.toInt(),
-              'boxwidth': faceRect!.width.toInt(),
-              'boxheight': faceRect!.height.toInt(),
-            },
-          );
+          final dataMap = await EmotionDetectionPlatform.instance.faceEmotion({
+            'faceImageData': imagelib.encodePng(faceImage!),
+            'width': width,
+            'height': height,
+            'left': faceRect!.left.toInt(),
+            'top': faceRect!.top.toInt(),
+            'boxwidth': faceRect!.width.toInt(),
+            'boxheight': faceRect!.height.toInt(),
+          });
           return dataMap;
         }
         /*var emotionString = getEmotion(data);

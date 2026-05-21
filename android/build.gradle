@@ -2,7 +2,7 @@ group = "com.tartalabs.emotiondetection.emotion_detection"
 version = "1.0-SNAPSHOT"
 
 buildscript {
-    ext.kotlin_version = "1.8.22"
+    ext.kotlin_version = "2.1.0"
     repositories {
         google()
         mavenCentral()
@@ -23,6 +23,10 @@ allprojects {
 
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
+apply plugin: "maven-publish"
+
+def flutterRoot = System.getenv("FLUTTER_ROOT")
+def flutterEmbeddingJar = flutterRoot == null ? null : file("$flutterRoot/bin/cache/artifacts/engine/android-x64/flutter.jar")
 
 android {
     namespace = "com.tartalabs.emotiondetection.emotion_detection"
@@ -47,6 +51,12 @@ android {
         minSdk = 21
     }
 
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
+    }
+
     dependencies {
         implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
         implementation 'com.google.mlkit:vision-common:17.3.0'
@@ -55,8 +65,11 @@ android {
         implementation "com.google.android.gms:play-services-tasks:17.0.0"
         implementation "org.tensorflow:tensorflow-lite-select-tf-ops:2.3.0"
         implementation 'org.tensorflow:tensorflow-lite-task-vision:0.4.0'
+        if (flutterEmbeddingJar != null && flutterEmbeddingJar.exists()) {
+            compileOnly files(flutterEmbeddingJar)
+        }
 
-        testImplementation("org.jetbrains.kotlin:kotlin-test")
+        testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
         testImplementation("org.mockito:mockito-core:5.0.0")
     }
 
@@ -68,6 +81,60 @@ android {
                events "passed", "skipped", "failed", "standardOut", "standardError"
                outputs.upToDateWhen {false}
                showStandardStreams = true
+            }
+        }
+    }
+}
+
+["Debug", "Profile", "Release"].each { variantName ->
+    def variantDirName = variantName.substring(0, 1).toLowerCase(Locale.ROOT) +
+            variantName.substring(1)
+    def packagedResourceDir = "${buildDir}/intermediates/packaged_res/" +
+            "${variantDirName}/package${variantName}Resources"
+    def stripAppleDoubleFiles = { String dirPath ->
+        def root = file(dirPath)
+        if (!root.exists()) {
+            return
+        }
+        def sidecars = []
+        root.eachFileRecurse { candidate ->
+            if (candidate.name.startsWith("._")) {
+                sidecars.add(candidate)
+            }
+        }
+        sidecars.reverseEach { sidecar ->
+            delete sidecar
+        }
+    }
+
+    def stripPackagedResources = tasks.register(
+            "strip${variantName}AppleDoubleResources") {
+        group = "build"
+        description = "Strip AppleDouble files from packaged ${variantName} resources."
+        dependsOn("package${variantName}Resources")
+        outputs.upToDateWhen { false }
+        doLast {
+            stripAppleDoubleFiles(packagedResourceDir)
+        }
+    }
+
+    tasks.matching { it.name == "parse${variantName}LocalResources" }.configureEach {
+        dependsOn(stripPackagedResources)
+    }
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                groupId = project.group
+                artifactId = "emotion-native-sdk-android"
+                version = project.version
+                pom {
+                    name = "Emotion Native SDK Android"
+                    description = "Android SDK wrapper for the emotion detection native runtime."
+                }
             }
         }
     }

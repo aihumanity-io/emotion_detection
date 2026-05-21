@@ -6,9 +6,163 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 class _FakeEmotionDetectionPlatform
     with MockPlatformInterfaceMixin
     implements EmotionDetectionPlatform {
+  String? streamModelId;
+  String? previewModelId;
+  bool? streamDebugFaceCrop;
+  bool? previewDebugFaceCrop;
+  var hidePreviewCallCount = 0;
+  Map<String, dynamic>? savedUserCode;
+  Map<String, dynamic>? clearedUserCode;
+  String? configuredModelRuntimeChannel;
+  Map<String, dynamic>? registeredModel;
+  Map<String, dynamic>? keyShard;
+  String? clearedKeyShardModelId;
+  Map<String, dynamic>? modelLicense;
+  String? clearedModelLicenseModelId;
+  String? warmedModelId;
+  Map<String, dynamic>? predictionRequest;
+  String? unloadedModelId;
+  Map<String, dynamic>? faceEmotionInputs;
+
   @override
   Future<String?> getPlatformVersion() async => '42';
+
+  @override
+  Stream<Map<String, double>> macCameraStream({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
+    streamModelId = modelId;
+    streamDebugFaceCrop = debugFaceCrop;
+    return Stream<Map<String, double>>.value({'happy': 0.75});
+  }
+
+  @override
+  Future<void> macShowCameraPreview({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) async {
+    previewModelId = modelId;
+    previewDebugFaceCrop = debugFaceCrop;
+  }
+
+  @override
+  Future<void> macHideCameraPreview() async {
+    hidePreviewCallCount += 1;
+  }
+
+  @override
+  Future<void> saveUserCode({
+    required String userName,
+    required String userCodeB64,
+    bool requireBiometrics = false,
+    String? modelId,
+  }) async {
+    savedUserCode = <String, dynamic>{
+      'userName': userName,
+      'userCodeB64': userCodeB64,
+      'requireBiometrics': requireBiometrics,
+      'modelId': modelId,
+    };
+  }
+
+  @override
+  Future<void> clearUserCode(String userName, {String? modelId}) async {
+    clearedUserCode = <String, dynamic>{
+      'userName': userName,
+      'modelId': modelId,
+    };
+  }
+
+  @override
+  void configureModelRuntimeChannel(String methodChannelName) {
+    configuredModelRuntimeChannel = methodChannelName;
+  }
+
+  @override
+  Future<void> registerModel({
+    required String modelId,
+    required String resourceBase,
+    String encExt = 'onnx.enc',
+    String hkdfInfo = 'model_runtime',
+    String? masterKeyB64,
+  }) async {
+    registeredModel = <String, dynamic>{
+      'modelId': modelId,
+      'resourceBase': resourceBase,
+      'encExt': encExt,
+      'hkdfInfo': hkdfInfo,
+      'masterKeyB64': masterKeyB64,
+    };
+  }
+
+  @override
+  Future<void> setKeyShard({
+    required String modelId,
+    required String keyShardB64,
+    int? expiresAtMs,
+    String? userName,
+  }) async {
+    keyShard = <String, dynamic>{
+      'modelId': modelId,
+      'keyShardB64': keyShardB64,
+      'expiresAtMs': expiresAtMs,
+      'userName': userName,
+    };
+  }
+
+  @override
+  Future<void> clearKeyShard(String modelId) async {
+    clearedKeyShardModelId = modelId;
+  }
+
+  @override
+  Future<void> setModelLicense({
+    required String modelId,
+    required Map<String, dynamic> license,
+  }) async {
+    modelLicense = <String, dynamic>{
+      'modelId': modelId,
+      'license': license,
+    };
+  }
+
+  @override
+  Future<void> clearModelLicense(String modelId) async {
+    clearedModelLicenseModelId = modelId;
+  }
+
+  @override
+  Future<bool> warmUp(String modelId) async {
+    warmedModelId = modelId;
+    return true;
+  }
+
+  @override
+  Future<Map<String, dynamic>> predict(
+    String modelId,
+    Map<String, dynamic> inputs,
+  ) async {
+    predictionRequest = <String, dynamic>{
+      'modelId': modelId,
+      'inputs': inputs,
+    };
+    return <String, dynamic>{'happy': 0.5};
+  }
+
+  @override
+  Future<void> unload(String modelId) async {
+    unloadedModelId = modelId;
+  }
+
+  @override
+  Future<Map?> faceEmotion(Map<String, dynamic> inputs) async {
+    faceEmotionInputs = inputs;
+    return <String, dynamic>{'Neutral': 0.8};
+  }
 }
+
+class _UnimplementedEmotionDetectionPlatform extends EmotionDetectionPlatform {}
 
 void main() {
   test('getPlatformVersion delegates to platform implementation', () async {
@@ -18,5 +172,231 @@ void main() {
       EmotionDetection().getPlatformVersion(),
       completion('42'),
     );
+  });
+
+  test('mac camera stream delegates to platform implementation', () async {
+    final platform = _FakeEmotionDetectionPlatform();
+    EmotionDetectionPlatform.instance = platform;
+
+    await expectLater(
+      EmotionDetection().macCameraStream(
+        modelId: 'model-a',
+        debugFaceCrop: true,
+      ),
+      emits({'happy': 0.75}),
+    );
+    expect(platform.streamModelId, 'model-a');
+    expect(platform.streamDebugFaceCrop, isTrue);
+  });
+
+  test('mac camera preview controls delegate to platform implementation',
+      () async {
+    final platform = _FakeEmotionDetectionPlatform();
+    EmotionDetectionPlatform.instance = platform;
+
+    await EmotionDetection().macShowCameraPreview(
+      modelId: 'model-b',
+      debugFaceCrop: true,
+    );
+    await EmotionDetection().macHideCameraPreview();
+
+    expect(platform.previewModelId, 'model-b');
+    expect(platform.previewDebugFaceCrop, isTrue);
+    expect(platform.hidePreviewCallCount, 1);
+  });
+
+  test('user code channel delegates save and clear to platform implementation',
+      () async {
+    final platform = _FakeEmotionDetectionPlatform();
+    EmotionDetectionPlatform.instance = platform;
+
+    await UserCodeChannel.saveUserCode(
+      userName: 'david',
+      userCodeB64: 'code',
+      requireBiometrics: true,
+      modelId: 'model-c',
+    );
+    await UserCodeChannel.clearUserCode('david', modelId: 'model-c');
+
+    expect(platform.savedUserCode, <String, dynamic>{
+      'userName': 'david',
+      'userCodeB64': 'code',
+      'requireBiometrics': true,
+      'modelId': 'model-c',
+    });
+    expect(platform.clearedUserCode, <String, dynamic>{
+      'userName': 'david',
+      'modelId': 'model-c',
+    });
+  });
+
+  test('model runtime delegates provisioning calls to platform implementation',
+      () async {
+    final platform = _FakeEmotionDetectionPlatform();
+    EmotionDetectionPlatform.instance = platform;
+
+    ModelRuntime('custom_channel');
+    await ModelRuntime.registerModel(
+      modelId: 'model-d',
+      resourceBase: 'face_v1',
+      encExt: 'onnx.enc',
+      hkdfInfo: 'runtime',
+      masterKeyB64: 'master',
+    );
+    await ModelRuntime.setKeyShard(
+      modelId: 'model-d',
+      keyShardB64: 'shard',
+      expiresAtMs: 123,
+      userName: 'david',
+    );
+    await ModelRuntime.setModelLicense(
+      modelId: 'model-d',
+      license: <String, dynamic>{'ok': true},
+    );
+
+    expect(platform.configuredModelRuntimeChannel, 'custom_channel');
+    expect(platform.registeredModel, <String, dynamic>{
+      'modelId': 'model-d',
+      'resourceBase': 'face_v1',
+      'encExt': 'onnx.enc',
+      'hkdfInfo': 'runtime',
+      'masterKeyB64': 'master',
+    });
+    expect(platform.keyShard, <String, dynamic>{
+      'modelId': 'model-d',
+      'keyShardB64': 'shard',
+      'expiresAtMs': 123,
+      'userName': 'david',
+    });
+    expect(platform.modelLicense, <String, dynamic>{
+      'modelId': 'model-d',
+      'license': <String, dynamic>{'ok': true},
+    });
+  });
+
+  test(
+      'model runtime delegates prediction lifecycle to platform implementation',
+      () async {
+    final platform = _FakeEmotionDetectionPlatform();
+    EmotionDetectionPlatform.instance = platform;
+
+    final warmed = await ModelRuntime.warmUp('model-e');
+    final prediction = await ModelRuntime.predict(
+      'model-e',
+      <String, dynamic>{'input': 1},
+    );
+    await ModelRuntime.clearKeyShard('model-e');
+    await ModelRuntime.clearModelLicense('model-e');
+    await ModelRuntime.unload('model-e');
+
+    expect(warmed, isTrue);
+    expect(prediction, <String, dynamic>{'happy': 0.5});
+    expect(platform.warmedModelId, 'model-e');
+    expect(platform.predictionRequest, <String, dynamic>{
+      'modelId': 'model-e',
+      'inputs': <String, dynamic>{'input': 1},
+    });
+    expect(platform.clearedKeyShardModelId, 'model-e');
+    expect(platform.clearedModelLicenseModelId, 'model-e');
+    expect(platform.unloadedModelId, 'model-e');
+  });
+
+  test('face emotion inference delegates to platform implementation', () async {
+    final platform = _FakeEmotionDetectionPlatform();
+    EmotionDetectionPlatform.instance = platform;
+
+    final result = await EmotionDetectionPlatform.instance.faceEmotion(
+      <String, dynamic>{
+        'faceImageData': <int>[1, 2, 3]
+      },
+    );
+
+    expect(result, <String, dynamic>{'Neutral': 0.8});
+    expect(platform.faceEmotionInputs, <String, dynamic>{
+      'faceImageData': <int>[1, 2, 3],
+    });
+  });
+
+  test('platform methods fail clearly when a platform has not implemented them',
+      () async {
+    EmotionDetectionPlatform.instance =
+        _UnimplementedEmotionDetectionPlatform();
+    final platform = EmotionDetectionPlatform.instance;
+
+    final calls = <Object? Function()>[
+      platform.getPlatformVersion,
+      platform.macCameraStream,
+      () => platform.macShowCameraPreview(),
+      platform.macHideCameraPreview,
+      () => platform.saveUserCode(
+            userName: 'david',
+            userCodeB64: 'code',
+          ),
+      () => platform.clearUserCode('david'),
+      () => platform.configureModelRuntimeChannel('custom_channel'),
+      () => platform.registerModel(
+            modelId: 'model-a',
+            resourceBase: 'face_v1',
+          ),
+      () => platform.setKeyShard(
+            modelId: 'model-a',
+            keyShardB64: 'shard',
+          ),
+      () => platform.clearKeyShard('model-a'),
+      () => platform.setModelLicense(
+            modelId: 'model-a',
+            license: <String, dynamic>{'ok': true},
+          ),
+      () => platform.clearModelLicense('model-a'),
+      () => platform.warmUp('model-a'),
+      () => platform.predict('model-a', <String, dynamic>{}),
+      () => platform.unload('model-a'),
+      () => platform.faceEmotion(<String, dynamic>{}),
+    ];
+
+    for (final call in calls) {
+      expect(call, throwsA(isA<UnimplementedError>()));
+    }
+  });
+
+  test('public wrappers fail clearly on unimplemented platform methods',
+      () async {
+    EmotionDetectionPlatform.instance =
+        _UnimplementedEmotionDetectionPlatform();
+
+    final emotionDetection = EmotionDetection();
+    final calls = <Object? Function()>[
+      emotionDetection.getPlatformVersion,
+      emotionDetection.macCameraStream,
+      () => emotionDetection.macShowCameraPreview(),
+      emotionDetection.macHideCameraPreview,
+      () => UserCodeChannel.saveUserCode(
+            userName: 'david',
+            userCodeB64: 'code',
+          ),
+      () => UserCodeChannel.clearUserCode('david'),
+      () => ModelRuntime('custom_channel'),
+      () => ModelRuntime.registerModel(
+            modelId: 'model-a',
+            resourceBase: 'face_v1',
+          ),
+      () => ModelRuntime.setKeyShard(
+            modelId: 'model-a',
+            keyShardB64: 'shard',
+          ),
+      () => ModelRuntime.clearKeyShard('model-a'),
+      () => ModelRuntime.setModelLicense(
+            modelId: 'model-a',
+            license: <String, dynamic>{'ok': true},
+          ),
+      () => ModelRuntime.clearModelLicense('model-a'),
+      () => ModelRuntime.warmUp('model-a'),
+      () => ModelRuntime.predict('model-a', <String, dynamic>{}),
+      () => ModelRuntime.unload('model-a'),
+    ];
+
+    for (final call in calls) {
+      expect(call, throwsA(isA<UnimplementedError>()));
+    }
   });
 }

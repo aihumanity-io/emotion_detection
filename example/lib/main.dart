@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:camera/camera.dart';
 import 'package:emotion_detection/emotion_detection.dart';
@@ -9,12 +9,243 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+const String _sdkKeyIdFromDefine = String.fromEnvironment(
+  'SDK_KEY_ID',
+  defaultValue: '',
+);
+const String _sdkKeySecretFromDefine = String.fromEnvironment(
+  'SDK_KEY_SECRET',
+  defaultValue: '',
+);
+const String _exampleUserNameFromDefine = String.fromEnvironment(
+  'EXAMPLE_USER_NAME',
+  defaultValue: '',
+);
+const String _exampleServerBaseUrlFromDefine = String.fromEnvironment(
+  'EXAMPLE_SERVER_BASE_URL',
+  defaultValue: '',
+);
+const String _exampleModelKeyFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_KEY',
+  defaultValue: '',
+);
+const String _exampleModelAadFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD',
+  defaultValue: '',
+);
+const String _exampleModelAadIosFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD_IOS',
+  defaultValue: '',
+);
+const String _exampleModelAadMacosFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD_MACOS',
+  defaultValue: '',
+);
+const String _exampleModelAadAndroidFromDefine = String.fromEnvironment(
+  'EXAMPLE_MODEL_AAD_ANDROID',
+  defaultValue: '',
+);
+const String _debugFaceCropFromDefine = String.fromEnvironment(
+  'EMOTION_DEBUG_FACE_CROP',
+  defaultValue: '',
+);
+
+Map<String, String> _localEnvFile = <String, String>{};
+Map<String, String> _nativeProcessEnv = <String, String>{};
+String _localEnvStatus = 'not loaded';
+String _nativeEnvStatus = 'not loaded';
+
+Map<String, String> _parseEnvContents(String input) {
+  final result = <String, String>{};
+  for (final rawLine in input.split('\n')) {
+    final line = rawLine.trim();
+    if (line.isEmpty) continue;
+    if (line.startsWith('#')) continue;
+    final idx = line.indexOf('=');
+    if (idx <= 0) continue;
+    final key = line.substring(0, idx).trim();
+    final value = line.substring(idx + 1).trim();
+    if (key.isEmpty) continue;
+    result[key] = value;
+  }
+  return result;
+}
+
+Future<void> _loadLocalEnvFileIfPresent() async {
+  Future<File?> tryFindFromBase(String baseDir) async {
+    final candidates = <String>[
+      'env',
+      '.env',
+      'example/env',
+      'example/.env',
+      '../env',
+      '../.env',
+      '../../env',
+      '../../.env',
+    ];
+    for (final rel in candidates) {
+      try {
+        final resolved = File('$baseDir/$rel');
+        if (await resolved.exists()) return resolved;
+      } catch (_) {
+        // ignore
+      }
+    }
+    return null;
+  }
+
+  Future<File?> findEnvFile() async {
+    final bases = <String>{
+      Directory.current.path,
+      if ((Platform.environment['PWD'] ?? '').trim().isNotEmpty)
+        Platform.environment['PWD']!.trim(),
+      File(Platform.resolvedExecutable).parent.path,
+    }.toList();
+
+    for (final base in bases) {
+      // Check base and a few parents. Handles macOS apps where cwd can be `/`
+      // but the build output still lives under `example/build/...`.
+      var dir = Directory(base);
+      for (var i = 0; i < 10; i++) {
+        final found = await tryFindFromBase(dir.path);
+        if (found != null) return found;
+        final parent = dir.parent;
+        if (parent.path == dir.path) break;
+        dir = parent;
+      }
+    }
+    return null;
+  }
+
+  try {
+    final file = await findEnvFile();
+    if (file == null) {
+      _localEnvStatus = 'not found';
+      if (kDebugMode) {
+        debugPrint(
+          'No local env file found. '
+          'cwd: ${Directory.current.path}, '
+          'PWD: ${Platform.environment['PWD'] ?? ''}, '
+          'resolvedExecutable: ${Platform.resolvedExecutable}',
+        );
+      }
+      return;
+    }
+    final contents = await file.readAsString();
+    _localEnvFile = _parseEnvContents(contents);
+    if (kDebugMode) {
+      debugPrint(
+        'Loaded local env file: ${file.path} (keys: ${_localEnvFile.keys.length}, cwd: ${Directory.current.path})',
+      );
+    }
+    _localEnvStatus = 'loaded: ${file.path}';
+  } catch (_) {
+    _localEnvStatus = 'load error';
+    // ignore
+  }
+}
+
+Future<void> _loadNativeProcessEnvironmentIfPresent() async {
+  if (!Platform.isIOS && !Platform.isMacOS) {
+    _nativeEnvStatus = 'not supported on ${defaultTargetPlatform.name}';
+    return;
+  }
+
+  try {
+    const channel = MethodChannel('face_emotion_detection');
+    final raw = await channel.invokeMethod<Map>('getProcessEnvironment');
+    if (raw == null) {
+      _nativeEnvStatus = 'empty';
+      return;
+    }
+    _nativeProcessEnv = raw.map((key, value) => MapEntry(
+          key.toString(),
+          value?.toString() ?? '',
+        ));
+    _nativeEnvStatus = 'loaded: ${_nativeProcessEnv.length} keys';
+  } catch (e) {
+    _nativeEnvStatus = 'load error: $e';
+  }
+}
+
+Map<String, String> _safeDotenvEnv() {
+  try {
+    return dotenv.env;
+  } catch (_) {
+    return _localEnvFile;
+  }
+}
+
+void _debugPrintEnvDiagnostics(
+  Map<String, String> env,
+  Map<String, String> procEnv,
+  Map<String, String> nativeEnv,
+) {
+  if (!kDebugMode) return;
+
+  bool hasDefine(String v) => v.trim().isNotEmpty;
+  bool hasEnv(String k) => (env[k] ?? '').trim().isNotEmpty;
+  bool hasProc(String k) => (procEnv[k] ?? '').trim().isNotEmpty;
+  bool hasNative(String k) => (nativeEnv[k] ?? '').trim().isNotEmpty;
+
+  debugPrint(
+    'Env diagnostics: '
+    'platform=${defaultTargetPlatform.name}, '
+    'cwd=${Directory.current.path}, '
+    'localEnv=$_localEnvStatus, '
+    'nativeEnv=$_nativeEnvStatus, '
+    'SDK_KEY_ID{define=${hasDefine(_sdkKeyIdFromDefine)}, env=${hasEnv('SDK_KEY_ID')}, proc=${hasProc('SDK_KEY_ID')}, native=${hasNative('SDK_KEY_ID')}}, '
+    'SDK_KEY_SECRET{define=${hasDefine(_sdkKeySecretFromDefine)}, env=${hasEnv('SDK_KEY_SECRET')}, proc=${hasProc('SDK_KEY_SECRET')}, native=${hasNative('SDK_KEY_SECRET')}}',
+  );
+}
+
+String _pickValue(
+  String fromDefine,
+  Map<String, String> dotenvEnv,
+  Map<String, String> procEnv,
+  Map<String, String> nativeEnv,
+  String key,
+) {
+  final defineValue = fromDefine.trim();
+  if (defineValue.isNotEmpty) return defineValue;
+
+  final dotenvValue = (dotenvEnv[key] ?? '').trim();
+  if (dotenvValue.isNotEmpty) return dotenvValue;
+
+  final procValue = (procEnv[key] ?? '').trim();
+  if (procValue.isNotEmpty) return procValue;
+
+  return (nativeEnv[key] ?? '').trim();
+}
+
+String _firstNonEmpty(List<String> values) {
+  for (final v in values) {
+    final trimmed = v.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+  }
+  return '';
+}
+
+bool _pickBoolValue(
+  String fromDefine,
+  Map<String, String> dotenvEnv,
+  Map<String, String> procEnv,
+  Map<String, String> nativeEnv,
+  String key,
+) {
+  final value =
+      _pickValue(fromDefine, dotenvEnv, procEnv, nativeEnv, key).toLowerCase();
+  return value == '1' || value == 'true' || value == 'yes' || value == 'on';
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Load optional .env for local SDK keys (macOS/desktop-friendly)
-  try {
-    await dotenv.load(fileName: '.env');
-  } catch (_) {}
+  // Load optional env file for local SDK keys (external-volume friendly).
+  //
+  // `flutter_dotenv` loads from Flutter assets (rootBundle), not filesystem.
+  // For local development, read a plain `env` file from the working directory.
+  await _loadLocalEnvFileIfPresent();
+  await _loadNativeProcessEnvironmentIfPresent();
   // Guard camera warm-up on desktop/web to avoid MissingPluginException.
   if (Platform.isAndroid || Platform.isIOS) {
     try {
@@ -51,6 +282,7 @@ class _MyAppState extends State<MyApp> {
   bool _didClearCaches = false;
   String? _macResult;
   StreamSubscription<Map<String, double>>? _macCamSub;
+  late final bool _debugFaceCrop;
 
   String _activeMacModelId() {
     final preferred = _provisioner.modelKey.trim();
@@ -71,35 +303,84 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     // Initialize secrets module from .env or process env if present
-    final env = dotenv.env;
+    final env = _safeDotenvEnv();
     final procEnv = Platform.environment;
-    final apiKeyId = (env['SDK_KEY_ID'] ?? procEnv['SDK_KEY_ID'] ?? '').trim();
-    final apiKeySecret =
-        (env['SDK_KEY_SECRET'] ?? procEnv['SDK_KEY_SECRET'] ?? '').trim();
-    final baseUrl = (env['EXAMPLE_SERVER_BASE_URL'] ??
-            procEnv['EXAMPLE_SERVER_BASE_URL'] ??
-            '')
-        .trim();
-    final userName =
-        (env['EXAMPLE_USER_NAME'] ?? procEnv['EXAMPLE_USER_NAME'] ?? '').trim();
-    final modelKey =
-        (env['EXAMPLE_MODEL_KEY'] ?? procEnv['EXAMPLE_MODEL_KEY'] ?? '').trim();
-    final aadIOS = (env['EXAMPLE_MODEL_AAD_IOS'] ??
-            procEnv['EXAMPLE_MODEL_AAD_IOS'] ??
-            env['EXAMPLE_MODEL_AAD'] ??
-            procEnv['EXAMPLE_MODEL_AAD'] ??
-            '')
-        .trim();
-    final aad =
-        (env['EXAMPLE_MODEL_AAD'] ?? procEnv['EXAMPLE_MODEL_AAD'] ?? '').trim();
-    final aadAndroid = (env['EXAMPLE_MODEL_AAD_ANDROID'] ??
-            procEnv['EXAMPLE_MODEL_AAD_ANDROID'] ??
-            '')
-        .trim();
-    final aadMacOS = (env['EXAMPLE_MODEL_AAD_MACOS'] ??
-            procEnv['EXAMPLE_MODEL_AAD_MACOS'] ??
-            '')
-        .trim();
+    final nativeEnv = _nativeProcessEnv;
+    _debugPrintEnvDiagnostics(env, procEnv, nativeEnv);
+
+    final apiKeyId = _pickValue(
+      _sdkKeyIdFromDefine,
+      env,
+      procEnv,
+      nativeEnv,
+      'SDK_KEY_ID',
+    );
+    final apiKeySecret = _pickValue(
+      _sdkKeySecretFromDefine,
+      env,
+      procEnv,
+      nativeEnv,
+      'SDK_KEY_SECRET',
+    );
+    final baseUrl = _pickValue(
+      _exampleServerBaseUrlFromDefine,
+      env,
+      procEnv,
+      nativeEnv,
+      'EXAMPLE_SERVER_BASE_URL',
+    );
+    final userName = _pickValue(
+      _exampleUserNameFromDefine,
+      env,
+      procEnv,
+      nativeEnv,
+      'EXAMPLE_USER_NAME',
+    );
+    final modelKey = _pickValue(
+      _exampleModelKeyFromDefine,
+      env,
+      procEnv,
+      nativeEnv,
+      'EXAMPLE_MODEL_KEY',
+    );
+    final aadIOS = _firstNonEmpty(<String>[
+      _pickValue(_exampleModelAadIosFromDefine, env, procEnv, nativeEnv,
+          'EXAMPLE_MODEL_AAD_IOS'),
+      _pickValue(_exampleModelAadFromDefine, env, procEnv, nativeEnv,
+          'EXAMPLE_MODEL_AAD'),
+    ]);
+    final aad = _pickValue(
+      _exampleModelAadFromDefine,
+      env,
+      procEnv,
+      nativeEnv,
+      'EXAMPLE_MODEL_AAD',
+    );
+    final aadAndroid = _pickValue(
+      _exampleModelAadAndroidFromDefine,
+      env,
+      procEnv,
+      nativeEnv,
+      'EXAMPLE_MODEL_AAD_ANDROID',
+    );
+    final aadMacOS = _pickValue(
+      _exampleModelAadMacosFromDefine,
+      env,
+      procEnv,
+      nativeEnv,
+      'EXAMPLE_MODEL_AAD_MACOS',
+    );
+    _debugFaceCrop = _pickBoolValue(
+      _debugFaceCropFromDefine,
+      env,
+      procEnv,
+      nativeEnv,
+      'EMOTION_DEBUG_FACE_CROP',
+    );
+    if (_debugFaceCrop) {
+      debugPrint(
+          'Face crop debug enabled. Native crop PNGs will be written to /tmp.');
+    }
 
     _provisioner = EmotionDetectionProvisioner(
       sdkKeyId: apiKeyId,
@@ -220,7 +501,7 @@ class _MyAppState extends State<MyApp> {
     if (!_provisioner.hasRequiredConfig) {
       setState(() {
         _cekSecretStatus =
-            'Missing SDK_KEY_ID/SDK_KEY_SECRET. Provide via .env, environment, or --dart-define.';
+            'Missing SDK_KEY_ID/SDK_KEY_SECRET. Provide via `flutter run --dart-define-from-file=env` or `--dart-define`.';
       });
       return;
     }
@@ -360,8 +641,16 @@ class _MyAppState extends State<MyApp> {
     try {
       final ed = EmotionDetection();
       final modelId = _activeMacModelId();
-      ed.macShowCameraPreview(modelId: modelId);
-      _macCamSub = ed.macCameraStream(modelId: modelId).listen((dist) {
+      ed.macShowCameraPreview(
+        modelId: modelId,
+        debugFaceCrop: _debugFaceCrop,
+      );
+      _macCamSub = ed
+          .macCameraStream(
+        modelId: modelId,
+        debugFaceCrop: _debugFaceCrop,
+      )
+          .listen((dist) {
         String best = '';
         double bestV = -1.0;
         dist.forEach((k, v) {

@@ -56,3 +56,71 @@ dependencies {
 flutter {
     source = "../.."
 }
+
+["Debug", "Profile", "Release"].each { variantName ->
+    def variantDirName = variantName.substring(0, 1).toLowerCase(Locale.ROOT) +
+            variantName.substring(1)
+    def packagedResourceDir = "${rootProject.buildDir}/app/intermediates/packaged_res/" +
+            "${variantDirName}/package${variantName}Resources"
+    def mergedAssetDir = "${rootProject.buildDir}/app/intermediates/assets/" +
+            "${variantDirName}/merge${variantName}Assets"
+    def stripAppleDoubleFiles = { String dirPath ->
+        def root = file(dirPath)
+        if (!root.exists()) {
+            return
+        }
+        def sidecars = []
+        root.eachFileRecurse { candidate ->
+            if (candidate.name.startsWith("._")) {
+                sidecars.add(candidate)
+            }
+        }
+        sidecars.reverseEach { sidecar ->
+            delete sidecar
+        }
+    }
+
+    def stripPackagedResources = tasks.register(
+            "strip${variantName}AppleDoubleResources") {
+        group = "build"
+        description = "Strip AppleDouble files from packaged ${variantName} resources."
+        dependsOn("package${variantName}Resources")
+        outputs.upToDateWhen { false }
+        doLast {
+            stripAppleDoubleFiles(packagedResourceDir)
+        }
+    }
+
+    tasks.matching { it.name == "parse${variantName}LocalResources" }.configureEach {
+        dependsOn(stripPackagedResources)
+    }
+
+    def stripMergedAssetsBeforeClean = tasks.register(
+            "strip${variantName}AppleDoubleAssetsBeforeClean") {
+        group = "build"
+        description = "Strip AppleDouble files before cleaning merged ${variantName} assets."
+        outputs.upToDateWhen { false }
+        doLast {
+            stripAppleDoubleFiles(mergedAssetDir)
+        }
+    }
+
+    tasks.matching { it.name == "cleanMerge${variantName}Assets" }.configureEach {
+        dependsOn(stripMergedAssetsBeforeClean)
+    }
+
+    def stripMergedAssetsAfterMerge = tasks.register(
+            "strip${variantName}AppleDoubleAssetsAfterMerge") {
+        group = "build"
+        description = "Strip AppleDouble files from merged ${variantName} assets."
+        dependsOn("merge${variantName}Assets")
+        outputs.upToDateWhen { false }
+        doLast {
+            stripAppleDoubleFiles(mergedAssetDir)
+        }
+    }
+
+    tasks.matching { it.name == "compress${variantName}Assets" }.configureEach {
+        dependsOn(stripMergedAssetsAfterMerge)
+    }
+}

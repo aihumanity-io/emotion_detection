@@ -6,17 +6,22 @@ import '../native/user_code_channel.dart';
 import 'cek_secret_utils.dart';
 import 'sdk_secret_client.dart';
 
-const String defaultEmotionModelKey =
+const String exp15EmotionModelKey = 'aih_exp15_float16';
+
+const String defaultOnnxEmotionModelKey =
     'aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx';
 
+const String defaultEmotionModelKey = exp15EmotionModelKey;
+
 const List<String> defaultEmotionModelKeys = <String>[
+  exp15EmotionModelKey,
   'aih_fer20250115',
   'mobilenetv1_fer2024-11-06-08-48-50',
-  defaultEmotionModelKey,
+  defaultOnnxEmotionModelKey,
 ];
 
 const List<String> defaultAndroidEmotionModelKeys = <String>[
-  defaultEmotionModelKey,
+  defaultOnnxEmotionModelKey,
 ];
 
 class EmotionProvisioningException implements Exception {
@@ -431,7 +436,8 @@ class EmotionDetectionProvisioner {
 const Map<String, String> _modelAccountIds = <String, String>{
   'aih_fer': 'aih_fer_v2025-01-15-shard',
   'aih_fer20250115': 'aih_fer_v2025-01-15-shard',
-  defaultEmotionModelKey: defaultEmotionModelKey,
+  exp15EmotionModelKey: exp15EmotionModelKey,
+  defaultOnnxEmotionModelKey: defaultOnnxEmotionModelKey,
   'mobilenetv1_fer': 'mobilenetv1_fer_v2024-11-06-08-48-50-shard',
   'mobilenetv1_fer2024-11-06-08-48-50':
       'mobilenetv1_fer_v2024-11-06-08-48-50-shard',

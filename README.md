@@ -119,11 +119,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = EmotionDetectorViewController();
+
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(title: const Text('Emotion Detection Demo')),
         body: Center(
           child: EmotionDetectorView(
+            controller: controller,
             onEmotion: (dist) {
               // dist = {'happy': 0.62, 'neutral': 0.31, 'sad': 0.04, ...}
               debugPrint('Emotion distribution: $dist');
@@ -180,6 +183,10 @@ value.
 4. Never persist the shard; keep it in memory per the `encryption_note.md`
    guidance.
 
+The bundled iOS/macOS Core ML default is `aih_exp15_float16`. Its Core ML input
+is `pixel_values` (`Float32`, `[1, 3, 224, 224]`) with RGB ImageNet
+normalization and NCHW layout.
+
 Use `UserCodeChannel.saveUserCode` to persist the 32-byte user code (a.k.a.
 `user32`) into the native keychain once your backend returns it:
 
@@ -194,8 +201,19 @@ if (userCode is String && userCode.isNotEmpty) {
 }
 ```
 
-When running the example app, set `EXAMPLE_USER_NAME` via `--dart-define` so the
-UI knows which keychain account to use when saving the user code.
+When running the example app from the command line, provide local SDK
+credentials with `--dart-define-from-file=env` from the `example/` directory:
+
+```bash
+cd example
+flutter run --dart-define-from-file=env
+```
+
+For Xcode Run button workflows on iOS/macOS, add `SDK_KEY_ID`,
+`SDK_KEY_SECRET`, `EXAMPLE_USER_NAME`, `EXAMPLE_SERVER_BASE_URL`, and optional
+`EXAMPLE_MODEL_KEY` as Runner scheme environment variables. The example bridges
+native `ProcessInfo.processInfo.environment` into Dart for this dev workflow.
+Do not bundle `.env` as a Flutter asset for SDK secrets.
 
 ---
 
@@ -205,10 +223,14 @@ UI knows which keychain account to use when saving the user code.
 class EmotionDetectorView extends StatefulWidget {
   EmotionDetectorView({
     Key? key,
+    required this.controller,
     this.onFaceImage,
     this.onEmotion,
     this.onImage,
   }) : super(key: key);
+
+  /// Controls snapshot and picture-capture requests.
+  final EmotionDetectorViewController controller;
 
   /// Called with a list of cropped face images (if faces are found).
   /// Return a Flutter [Image] to render if you want, or ignore.

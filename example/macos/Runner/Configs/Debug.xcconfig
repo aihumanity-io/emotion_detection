@@ -1,2 +1,9 @@
 #include "../../Flutter/Flutter-Debug.xcconfig"
 #include "Warnings.xcconfig"
+
+// External volumes (exFAT) can produce AppleDouble `._*` sidecars during codesign,
+// which causes macOS builds to fail. Disable codesign for Debug to keep local
+// integration tests runnable from external drives.
+CODE_SIGNING_ALLOWED = NO
+CODE_SIGNING_REQUIRED = NO
+CODE_SIGN_IDENTITY =

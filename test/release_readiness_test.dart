@@ -1,0 +1,45 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('release readiness documents current SDK release scope', () {
+    final doc = File('doc/release-readiness.md').readAsStringSync();
+
+    expect(doc, contains('Status: not ready for a stable public SDK release.'));
+    expect(doc, contains('native alpha / release candidate'));
+    expect(doc, contains('flutter pub publish --dry-run'));
+    expect(doc, contains('cmake --preset host-release'));
+    expect(doc, contains('ctest --preset host-release'));
+    expect(doc, contains('Native Windows CI'));
+    expect(doc, contains('emotion_windows_secure_store_test'));
+    expect(doc, contains('windows-latest'));
+    expect(doc, contains('doc/release-tag-checklist.md'));
+    expect(doc, contains('May 13 2026 Smoke Results'));
+    expect(doc, contains('macOS runtime integration | Blocked'));
+    expect(doc, contains('Android JVM plugin tests | Pass'));
+    expect(doc, contains('Example app smoke on every advertised platform.'));
+    expect(doc, contains('Local macOS Build Smoke'));
+    expect(doc, contains('CODE_SIGNING_ALLOWED=NO'));
+    expect(doc, contains('AppleDouble'));
+    expect(doc, contains('Local iOS Build Smoke'));
+    expect(doc, contains('flutter build ios --debug --no-codesign'));
+    expect(doc, contains('Local Android Build Smoke'));
+    expect(doc, contains('flutter build apk --debug'));
+    expect(doc, contains('./gradlew :emotion_detection:testDebugUnitTest'));
+    expect(doc, contains('Permission And Entitlement Gate'));
+    expect(doc, contains('test/platform_permissions_test.dart'));
+    expect(doc, contains('Model Asset Scope Gate'));
+    expect(doc, contains('test/model_asset_scope_test.dart'));
+    expect(doc, contains('71 MB'));
+    expect(doc, contains('Web | Evaluation only'));
+    expect(doc, contains('distribution is no-go'));
+  });
+
+  test('example app declares an iOS build version', () {
+    final pubspec = File('example/pubspec.yaml').readAsStringSync();
+
+    expect(pubspec,
+        contains(RegExp(r'^version: \d+\.\d+\.\d+\+\d+$', multiLine: true)));
+  });
+}

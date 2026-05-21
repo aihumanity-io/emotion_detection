@@ -25,6 +25,24 @@ end
 
 require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
 
+# Flutter's `flutter_parse_xcconfig_file` (from podhelper.rb) uses `line.split('=')`,
+# which breaks on `DART_DEFINES` because the base64 payload contains `=` padding.
+# Override locally to split once and avoid noisy "Invalid key/value pair" output.
+def flutter_parse_xcconfig_file(file)
+  file_abs_path = File.expand_path(file)
+  return [] unless File.exist?(file_abs_path)
+
+  entries = {}
+  skip_line_start_symbols = ['#', '/']
+  File.foreach(file_abs_path) do |line|
+    next if skip_line_start_symbols.any? { |symbol| line =~ /^\s*#{symbol}/ }
+    key, value = line.split('=', 2)
+    next if value.nil?
+    entries[key.strip] = value.strip
+  end
+  entries
+end
+
 flutter_ios_podfile_setup
 
 target 'Runner' do
@@ -37,8 +55,27 @@ target 'Runner' do
   end
 end
 
+def add_appledouble_cleanup_phase(target)
+  return unless ['onnxruntime-c', 'onnxruntime-objc', 'ZIPFoundation'].include?(target.name)
+
+  phase_name = 'Strip AppleDouble files'
+  phase = target.shell_script_build_phases.find { |build_phase| build_phase.name == phase_name }
+  phase ||= target.new_shell_script_build_phase(phase_name)
+  phase.shell_script = <<-'SCRIPT'
+export COPYFILE_DISABLE=1
+export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
+if command -v dot_clean >/dev/null 2>&1; then
+  for path in "${PODS_ROOT}" "${TARGET_BUILD_DIR}" "${BUILT_PRODUCTS_DIR}"; do
+    [ -d "$path" ] && dot_clean -m "$path"
+    [ -d "$path" ] && /usr/bin/find "$path" -name '._*' -exec /bin/rm -f {} +
+  done
+fi
+SCRIPT
+end
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    add_appledouble_cleanup_phase(target)
   end
 end

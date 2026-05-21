@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'emotion_detection_method_channel.dart';
@@ -24,7 +26,114 @@ abstract class EmotionDetectionPlatform extends PlatformInterface {
   }
 
   Future<String?> getPlatformVersion() {
-    return instance.getPlatformVersion();
-    //throw UnimplementedError('platformVersion() has not been implemented.');
+    throw UnimplementedError('getPlatformVersion() has not been implemented.');
+  }
+
+  Stream<Map<String, double>> macCameraStream({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
+    throw UnimplementedError('macCameraStream() has not been implemented.');
+  }
+
+  Future<void> macShowCameraPreview({
+    String? modelId,
+    bool debugFaceCrop = false,
+  }) {
+    throw UnimplementedError(
+      'macShowCameraPreview() has not been implemented.',
+    );
+  }
+
+  Future<void> macHideCameraPreview() {
+    throw UnimplementedError(
+      'macHideCameraPreview() has not been implemented.',
+    );
+  }
+
+  Future<void> saveUserCode({
+    required String userName,
+    required String userCodeB64,
+    bool requireBiometrics = false,
+    String? modelId,
+  }) {
+    throw UnimplementedError(
+      'saveUserCode() has not been implemented.',
+    );
+  }
+
+  Future<void> clearUserCode(String userName, {String? modelId}) {
+    throw UnimplementedError(
+      'clearUserCode() has not been implemented.',
+    );
+  }
+
+  void configureModelRuntimeChannel(String methodChannelName) {
+    throw UnimplementedError(
+      'configureModelRuntimeChannel() has not been implemented.',
+    );
+  }
+
+  Future<void> registerModel({
+    required String modelId,
+    required String resourceBase,
+    String encExt = 'onnx.enc',
+    String hkdfInfo = 'model_runtime',
+    String? masterKeyB64,
+  }) {
+    throw UnimplementedError(
+      'registerModel() has not been implemented.',
+    );
+  }
+
+  Future<void> setKeyShard({
+    required String modelId,
+    required String keyShardB64,
+    int? expiresAtMs,
+    String? userName,
+  }) {
+    throw UnimplementedError(
+      'setKeyShard() has not been implemented.',
+    );
+  }
+
+  Future<void> clearKeyShard(String modelId) {
+    throw UnimplementedError(
+      'clearKeyShard() has not been implemented.',
+    );
+  }
+
+  Future<void> setModelLicense({
+    required String modelId,
+    required Map<String, dynamic> license,
+  }) {
+    throw UnimplementedError(
+      'setModelLicense() has not been implemented.',
+    );
+  }
+
+  Future<void> clearModelLicense(String modelId) {
+    throw UnimplementedError(
+      'clearModelLicense() has not been implemented.',
+    );
+  }
+
+  Future<bool> warmUp(String modelId) {
+    throw UnimplementedError('warmUp() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>> predict(
+    String modelId,
+    Map<String, dynamic> inputs,
+  ) {
+    throw UnimplementedError('predict() has not been implemented.');
+  }
+
+  Future<void> unload(String modelId) {
+    throw UnimplementedError('unload() has not been implemented.');
+  }
+
+  Future<Map?> faceEmotion(Map<String, dynamic> inputs) {
+    throw UnimplementedError('faceEmotion() has not been implemented.');
   }
 }

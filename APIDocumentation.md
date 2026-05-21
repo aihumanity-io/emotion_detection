@@ -78,7 +78,8 @@ void stopMacCamera() async { await _sub?.cancel(); _sub = null; }
 Notes
 - Requires `NSCameraUsageDescription` and camera entitlement in sandboxed builds.
 - The stream begins on `listen` and stops when the subscription is canceled.
-- Default model is `aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx` unless overridden.
+- Default iOS/macOS model is `aih_exp15_float16` unless overridden. Android
+  continues to use `aih_emotion_pretrained1573_converted_2025-03-13-16-43-21_onnx`.
 
 ---
 
@@ -108,11 +109,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = EmotionDetectorViewController();
+
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(title: const Text('Emotion Detection')),
         body: Center(
           child: EmotionDetectorView(
+            controller: controller,
             onEmotion: (dist) => debugPrint('Emotion dist: $dist'),
             onFaceImage: (faces) {
               if (faces == null || faces.isEmpty) return const SizedBox();
@@ -132,6 +136,23 @@ class MyApp extends StatelessWidget {
 
 ## Public API
 
+### Native SDK migration compatibility
+
+The Flutter package remains the public entrypoint during the native SDK
+migration. Importing `package:emotion_detection/emotion_detection.dart` still
+exports:
+
+* `EmotionDetectorView` and `EmotionDetectorViewController`
+* `EmotionDetection`
+* `UserCodeChannel`
+* `ModelRuntime`
+* `CekSecretClient` and `CekSecretUtils`
+* provisioning result and exception types
+
+Platform calls now route through `EmotionDetectionPlatform`, so incomplete
+platform implementations fail with `UnimplementedError` instead of hanging or
+recursing.
+
 ### `EmotionDetectorView`
 
 A stateful widget that:
@@ -146,10 +167,20 @@ A stateful widget that:
 ```dart
 EmotionDetectorView({
   Key? key,
+  required EmotionDetectorViewController controller,
   OnFaceImage? onFaceImage,
   OnEmotion? onEmotion,
   OnImage? onImage,
 })
+```
+
+`EmotionDetectorViewController` exposes snapshot and picture-capture controls
+without changing the widget callback surface:
+
+```dart
+final controller = EmotionDetectorViewController();
+controller.takeSnapShot();
+final path = await controller.takePicture();
 ```
 
 #### Typedefs
@@ -205,6 +236,13 @@ The initializer:
 Normal app code should call this initializer before mounting
 `EmotionDetectorView` or running `ModelRuntime.predict`. The lower-level APIs
 below remain available for debugging and custom flows.
+
+For local example-app development, provide `SDK_KEY_ID`, `SDK_KEY_SECRET`, and
+`EXAMPLE_USER_NAME` with `flutter run --dart-define-from-file=env`, explicit
+`--dart-define` values, or iOS/macOS Xcode Runner scheme environment variables.
+The example app bridges native `ProcessInfo.processInfo.environment` into Dart
+so Xcode Run button launches can read scheme variables. Do not bundle `.env` as
+a Flutter asset for SDK secrets.
 
 > Security note: this phase still places `sdkKeySecret` in the client app. Use
 > it for development or controlled deployments. A production hosted path should
